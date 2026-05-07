@@ -1,0 +1,191 @@
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS jegyek;
+DROP TABLE IF EXISTS Tavollet;
+DROP TABLE IF EXISTS Feladat;
+DROP TABLE IF EXISTS projekt;
+DROP TABLE IF EXISTS Alkalmazott;
+DROP TABLE IF EXISTS Ugyfel;
+DROP TABLE IF EXISTS Csapat;
+DROP TABLE IF EXISTS Felhasznalo;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+CREATE TABLE Felhasznalo (
+    Id BIGINT NOT NULL AUTO_INCREMENT,
+    Keresztnev VARCHAR(255),
+    Vezeteknev VARCHAR(255),
+    Email VARCHAR(255) NOT NULL,
+    Jelszo VARCHAR(255) NOT NULL,
+    Szuletesi_datum DATE,
+    Telefonszam VARCHAR(255),
+    Cim VARCHAR(255),
+    Varos VARCHAR(255),
+    Iranyitoszam VARCHAR(255),
+    Hazszam VARCHAR(255),
+    Szerepkor VARCHAR(50),
+    Aktiv BIT NOT NULL DEFAULT 0,
+    Visszaallito_kod VARCHAR(255),
+    Visszaallito_kod_lejar DATETIME(6),
+    Aktivalo_kod VARCHAR(255),
+    Aktivalo_kod_lejar DATETIME(6),
+    PRIMARY KEY (Id),
+    UNIQUE KEY uk_felhasznalo_email (Email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE Alkalmazott (
+    Id BIGINT NOT NULL,
+    Adoazonosito VARCHAR(255),
+    Szemelyi_igazolvany_szam VARCHAR(255),
+    Taj_szam VARCHAR(255),
+    Fizetes BIGINT,
+    Felvetel_datum DATE,
+    Csapat_id BIGINT,
+    Teljesitett_feladatok INT NOT NULL DEFAULT 0,
+    Lezart_jegyek INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (Id),
+    CONSTRAINT fk_alkalmazott_felhasznalo
+        FOREIGN KEY (Id) REFERENCES Felhasznalo (Id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE Ugyfel (
+    Id BIGINT NOT NULL,
+    Ceg_nev VARCHAR(255) NOT NULL,
+    PRIMARY KEY (Id),
+    CONSTRAINT fk_ugyfel_felhasznalo
+        FOREIGN KEY (Id) REFERENCES Felhasznalo (Id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE Csapat (
+    Id BIGINT NOT NULL AUTO_INCREMENT,
+    Nev VARCHAR(255),
+    Tulajdonos_id BIGINT NOT NULL,
+    PRIMARY KEY (Id),
+    UNIQUE KEY uk_csapat_tulajdonos (Tulajdonos_id),
+    CONSTRAINT fk_csapat_tulajdonos
+        FOREIGN KEY (Tulajdonos_id) REFERENCES Alkalmazott (Id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE Alkalmazott
+    ADD CONSTRAINT fk_alkalmazott_csapat
+        FOREIGN KEY (Csapat_id) REFERENCES Csapat (Id);
+
+CREATE TABLE projekt (
+    Id BIGINT NOT NULL AUTO_INCREMENT,
+    Letrehozo_id BIGINT NOT NULL,
+    Termek_tulajdonos_id BIGINT,
+    Csapat_id BIGINT,
+    Cim VARCHAR(255),
+    Leiras VARCHAR(255),
+    Statusz VARCHAR(50),
+    Projekt_koltseg BIGINT NOT NULL DEFAULT 0,
+    Kezdete DATE,
+    Hatarido DATE,
+    Befejezve DATE,
+    PRIMARY KEY (Id),
+    KEY idx_projekt_statusz (Statusz),
+    KEY idx_projekt_befejezve (Befejezve),
+    CONSTRAINT fk_projekt_letrehozo
+        FOREIGN KEY (Letrehozo_id) REFERENCES Felhasznalo (Id),
+    CONSTRAINT fk_projekt_termek_tulajdonos
+        FOREIGN KEY (Termek_tulajdonos_id) REFERENCES Alkalmazott (Id),
+    CONSTRAINT fk_projekt_csapat
+        FOREIGN KEY (Csapat_id) REFERENCES Csapat (Id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE Feladat (
+    Id BIGINT NOT NULL AUTO_INCREMENT,
+    Projekt_id BIGINT NOT NULL,
+    Munkatars_id BIGINT,
+    Cim VARCHAR(255),
+    Leiras VARCHAR(255),
+    Statusz VARCHAR(50),
+    Prioritas VARCHAR(50),
+    PRIMARY KEY (Id),
+    KEY idx_feladat_statusz (Statusz),
+    CONSTRAINT fk_feladat_projekt
+        FOREIGN KEY (Projekt_id) REFERENCES projekt (Id),
+    CONSTRAINT fk_feladat_munkatars
+        FOREIGN KEY (Munkatars_id) REFERENCES Alkalmazott (Id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE Tavollet (
+    Id BIGINT NOT NULL AUTO_INCREMENT,
+    Munkatars_id BIGINT,
+    Jovahagyta BIGINT,
+    Tipus VARCHAR(50),
+    Statusz VARCHAR(50),
+    Kezdet DATE,
+    Vege DATE,
+    Munkanapok INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (Id),
+    KEY idx_tavollet_statusz (Statusz),
+    KEY idx_tavollet_kezdet (Kezdet),
+    CONSTRAINT fk_tavollet_munkatars
+        FOREIGN KEY (Munkatars_id) REFERENCES Alkalmazott (Id),
+    CONSTRAINT fk_tavollet_jovahagyta
+        FOREIGN KEY (Jovahagyta) REFERENCES Alkalmazott (Id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE jegyek (
+    Id BIGINT NOT NULL AUTO_INCREMENT,
+    Letrehozta BIGINT NOT NULL,
+    It_munkatars_id BIGINT,
+    Tipus VARCHAR(50),
+    Statusz VARCHAR(50),
+    Problema TEXT,
+    PRIMARY KEY (Id),
+    KEY idx_jegyek_statusz (Statusz),
+    CONSTRAINT fk_jegyek_letrehozta
+        FOREIGN KEY (Letrehozta) REFERENCES Felhasznalo (Id),
+    CONSTRAINT fk_jegyek_it_munkatars
+        FOREIGN KEY (It_munkatars_id) REFERENCES Alkalmazott (Id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO Felhasznalo (Id, Keresztnev, Vezeteknev, Email, Jelszo, Szuletesi_datum, Szerepkor, Aktiv)
+VALUES
+    (1, 'Admin', 'Elek', 'admin@example.com', 'admin', '1990-01-01', 'ADMIN', 1),
+    (2, 'Hr', 'Anna', 'hr@example.com', 'hr', '1992-02-02', 'HR', 1),
+    (3, 'It', 'Bela', 'it@example.com', 'it', '1991-03-03', 'IT', 1),
+    (4, 'Owner', 'Peter', 'po@example.com', 'po', '1988-04-04', 'PRODUCT_OWNER', 1),
+    (5, 'Dev', 'Dora', 'dev@example.com', 'dev', '1995-05-05', 'DEVELOPER', 1),
+    (6, 'Ugyfel', 'Kft', 'customer@example.com', 'customer', '1985-06-06', 'CUSTOMER', 1);
+
+INSERT INTO Alkalmazott (Id, Adoazonosito, Szemelyi_igazolvany_szam, Taj_szam, Fizetes, Felvetel_datum, Teljesitett_feladatok, Lezart_jegyek)
+VALUES
+    (1, '1111111111', 'A-111111', '111111111', 900000, '2019-01-01', 0, 0),
+    (2, '2222222222', 'B-222222', '222222222', 650000, '2023-01-01', 0, 0),
+    (3, '3333333333', 'C-333333', '333333333', 700000, '2022-01-01', 0, 5),
+    (4, '4444444444', 'D-444444', '444444444', 850000, '2020-01-01', 0, 0),
+    (5, '5555555555', 'E-555555', '555555555', 600000, '2024-01-01', 2, 0);
+
+INSERT INTO Ugyfel (Id, Ceg_nev)
+VALUES (6, 'Demo Ugyfel Kft.');
+
+INSERT INTO Csapat (Id, Nev, Tulajdonos_id)
+VALUES (1, 'Alpha csapat', 4);
+
+UPDATE Alkalmazott
+SET Csapat_id = 1
+WHERE Id IN (5);
+
+INSERT INTO projekt (Id, Letrehozo_id, Termek_tulajdonos_id, Csapat_id, Cim, Leiras, Statusz, Projekt_koltseg, Kezdete, Hatarido, Befejezve)
+VALUES
+    (1, 6, 4, NULL, 'Lezart webfejlesztes', 'Demo completed projekt', 'COMPLETED', 12000000, '2024-01-10', '2024-08-01', '2024-08-15'),
+    (2, 6, 4, 1, 'Aktiv rendszerfejlesztes', 'Demo accepted projekt', 'ACCEPTED', 8000000, '2025-02-01', '2025-11-30', NULL),
+    (3, 6, NULL, NULL, 'Pending igeny', 'Demo pending projekt', 'PENDING', 5000000, '2025-03-01', '2025-12-31', NULL);
+
+INSERT INTO Feladat (Projekt_id, Munkatars_id, Cim, Leiras, Statusz, Prioritas)
+VALUES
+    (2, NULL, 'Adatbazis ellenorzes', 'Tabla- es kapcsolatellenorzes', 'TO_DO', 'MEDIUM'),
+    (2, 5, 'Frontend statisztika', 'Diagramok megjelenitese', 'IN_PROGRESS', 'HIGH');
+
+INSERT INTO Tavollet (Munkatars_id, Jovahagyta, Tipus, Statusz, Kezdet, Vege, Munkanapok)
+VALUES
+    (5, 4, 'DAY_OFF', 'APPROVED', '2025-07-01', '2025-07-05', 5),
+    (5, NULL, 'HOME_OFFICE', 'PENDING', '2025-09-01', '2025-09-02', 2);
+
+INSERT INTO jegyek (Letrehozta, It_munkatars_id, Tipus, Statusz, Problema)
+VALUES
+    (6, 3, 'HELP', 'CLOSED', 'Demo lezart ugyfel jegy'),
+    (5, NULL, 'BUG', 'OPEN', 'Demo nyitott hiba');
