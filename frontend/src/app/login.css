@@ -1,0 +1,145 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+}
+
+.login-page {
+  align-items: center;
+  background: var(--page-bg);
+  color: var(--text-color);
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: clamp(12px, 4vw, 32px);
+}
+
+.login-form {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 20px 45px rgb(15 23 42 / 14%);
+  max-height: calc(100dvh - 24px);
+  max-width: min(390px, 100%);
+  overflow: auto;
+  width: 100%;
+}
+
+.login-toolbar {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: clamp(10px, 3vw, 16px);
+}
+
+.brand-media {
+  margin: clamp(16px, 4vw, 26px) auto clamp(8px, 2vw, 12px);
+  max-width: 220px;
+  min-height: 88px;
+  text-align: center;
+}
+
+.brand-logo {
+  display: block;
+  height: 88px;
+  margin: 0 auto;
+  max-width: 100%;
+  object-fit: contain;
+  width: auto;
+}
+
+.container {
+  padding: clamp(14px, 4vw, 18px);
+}
+
+h1 {
+  font-size: clamp(1.7rem, 6vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.1;
+  margin: 0;
+  text-align: center;
+}
+
+.login-subtitle {
+  color: var(--muted-color);
+  font-size: 0.98rem;
+  margin: 6px 0 clamp(12px, 4vw, 18px);
+  text-align: center;
+}
+
+.form-label {
+  margin-top: 10px;
+}
+
+.form-control {
+  margin-bottom: 10px;
+}
+
+.login-button {
+  margin-top: 4px;
+  min-width: 92px;
+}
+
+.mini-alert {
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+}
+
+.mini-alert.error {
+  background: #ffe8e8;
+  border: 1px solid #ffb4b4;
+  color: #8a1111;
+}
+
+.mini-alert.success {
+  background: #e8f5e9;
+  border: 1px solid #a8d5ad;
+  color: #125c20;
+}
+
+.login-checkbox,
+.remember {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.form-footer {
+  align-items: center;
+  background: var(--footer-bg);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.login-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media screen and (max-width: 360px) {
+  .login-toolbar,
+  .form-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .btn-group {
+    width: 100%;
+  }
+
+  .login-actions {
+    width: 100%;
+  }
+
+  .login-actions .btn {
+    width: 100%;
+  }
+}

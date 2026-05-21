@@ -1,0 +1,1257 @@
+<main class="management-shell">
+  <header class="topbar">
+    <div class="signed-user">{{ fullName }}</div>
+    <div class="brand-stack">
+      <img
+        class="brand-logo"
+        src="resources/Manage-me.jpeg"
+        alt="manage.me"
+        (error)="$any($event.target).style.display = 'none'"
+      >
+      <div class="brand">manage.me</div>
+    </div>
+    <div class="management-toolbar" [attr.aria-label]="t.settings">
+      <div class="setting-group" role="group" [attr.aria-label]="t.language">
+        <button type="button" class="setting-button" [class.active]="ui.language() === 'hu'" (click)="setLanguage('hu')">
+          HU
+        </button>
+        <button type="button" class="setting-button" [class.active]="ui.language() === 'en'" (click)="setLanguage('en')">
+          EN
+        </button>
+      </div>
+
+      <div class="setting-group" role="group" [attr.aria-label]="t.theme">
+        <button type="button" class="setting-button" [class.active]="ui.theme() === 'light'" (click)="setTheme('light')">
+          {{ t.white }}
+        </button>
+        <button type="button" class="setting-button" [class.active]="ui.theme() === 'dark'" (click)="setTheme('dark')">
+          {{ t.black }}
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar" aria-label="Main menu">
+      <div class="nav-bottom">
+        <button
+          type="button"
+          class="nav-button"
+          [class.active]="selectedView() === 'profile'"
+          (click)="showProfile()"
+        >
+          {{ t.profile }}
+        </button>
+
+        @if (canUseTeamMenu) {
+          <button
+            type="button"
+            class="nav-button"
+            [class.active]="selectedView() === 'team'"
+            (click)="showTeam()"
+        >
+            {{ t.team }}
+          </button>
+        }
+
+        @if (canUseTaskMenu) {
+          <button
+            type="button"
+            class="nav-button"
+            [class.active]="selectedView() === 'task'"
+            (click)="showTask()"
+        >
+            {{ t.task }}
+          </button>
+        }
+
+        @if (canUseDayOffMenu) {
+          <button
+            type="button"
+            class="nav-button"
+            [class.active]="selectedView() === 'dayOff'"
+            (click)="showDayOff()"
+        >
+            {{ t.dayOff }}
+          </button>
+        }
+
+        @if (canUseSupportMenu) {
+          <button
+            type="button"
+            class="nav-button"
+            [class.active]="selectedView() === 'support'"
+            (click)="showSupport()"
+        >
+            {{ t.support }}
+          </button>
+        }
+
+        @if (canUseHumanResources) {
+          <button
+            type="button"
+            class="nav-button"
+            [class.active]="selectedView() === 'hr'"
+            (click)="showHumanResources()"
+        >
+            {{ t.humanResources }}
+          </button>
+        }
+
+        @if (canUseProjectMenu) {
+          <button
+            type="button"
+            class="nav-button"
+            [class.active]="selectedView() === 'project'"
+            (click)="showProject()"
+        >
+            {{ t.project }}
+          </button>
+        }
+
+        @if (canUseStatistics) {
+          <button
+            type="button"
+            class="nav-button"
+            [class.active]="selectedView() === 'statistics'"
+            (click)="showStatistics()"
+        >
+            {{ t.statistics }}
+          </button>
+        }
+
+        <button type="button" class="nav-button logout-button" (click)="logout()">
+          {{ t.logout }}
+        </button>
+      </div>
+    </aside>
+
+    <section class="content">
+      @if (selectedView() === 'profile') {
+        <div class="profile-view">
+          @if (canModifyProfile) {
+            <div class="profile-menu">
+              <button type="button" class="action-button" (click)="toggleProfileEdit()">
+                {{ t.edit }}
+              </button>
+              <button type="button" class="action-button secondary" (click)="togglePasswordChange()">
+                {{ t.changePassword }}
+              </button>
+            </div>
+          }
+
+          @if (canModifyProfile || canAdministerPasswords) {
+            @if (profileMessage()) {
+              <p class="status-message success">{{ profileMessage() }}</p>
+            }
+            @if (profileError()) {
+              <p class="status-message error">{{ profileError() }}</p>
+            }
+            @if (passwordMessage()) {
+              <p class="status-message success">{{ passwordMessage() }}</p>
+            }
+            @if (passwordError()) {
+              <p class="status-message error">{{ passwordError() }}</p>
+            }
+
+            @if (canModifyProfile && editProfileVisible()) {
+              <form class="profile-card" (ngSubmit)="saveProfile()">
+                <h2>{{ t.editProfile }}</h2>
+                <label for="editKeresztname">{{ t.firstName }}</label>
+                <input
+                  id="editKeresztname"
+                  class="form-input"
+                  name="firstName"
+                  [(ngModel)]="profileForm.firstName"
+                  required
+                >
+
+                <label for="editVezetekname">{{ t.lastName }}</label>
+                <input
+                  id="editVezetekname"
+                  class="form-input"
+                  name="lastName"
+                  [(ngModel)]="profileForm.lastName"
+                  required
+                >
+
+                <label for="editEmail">{{ t.email }}</label>
+                <input
+                  id="editEmail"
+                  class="form-input"
+                  type="email"
+                  name="email"
+                  [(ngModel)]="profileForm.email"
+                  required
+                >
+
+                <label for="editBirthDate">{{ t.birthDate }}</label>
+                <input
+                  id="editBirthDate"
+                  class="form-input"
+                  type="date"
+                  name="birthDate"
+                  [(ngModel)]="profileForm.birthDate"
+                  required
+                >
+
+                <label for="editPhone">{{ t.phone }}</label>
+                <input
+                  id="editPhone"
+                  class="form-input"
+                  name="phoneNumber"
+                  [(ngModel)]="profileForm.phoneNumber"
+                  required
+                >
+
+                <label for="editPostalCode">{{ t.postalCode || 'Iranyitoszam' }}</label>
+                <input
+                  id="editPostalCode"
+                  class="form-input"
+                  name="postalCode"
+                  [(ngModel)]="profileForm.postalCode"
+                  required
+                >
+
+                <label for="editCity">{{ t.city || 'Varos' }}</label>
+                <input
+                  id="editCity"
+                  class="form-input"
+                  name="city"
+                  [(ngModel)]="profileForm.city"
+                  required
+                >
+
+                <label for="editAddress">{{ t.address }}</label>
+                <input
+                  id="editAddress"
+                  class="form-input"
+                  name="address"
+                  [(ngModel)]="profileForm.address"
+                  required
+                >
+
+                <label for="editHouseNumber">{{ t.houseNumber || 'Hazszam' }}</label>
+                <input
+                  id="editHouseNumber"
+                  class="form-input"
+                  name="houseNumber"
+                  [(ngModel)]="profileForm.houseNumber"
+                  required
+                >
+
+                @if (isCustomerProfile) {
+                  <label for="editCompanyName">{{ t.companyName }}</label>
+                  <input
+                    id="editCompanyName"
+                    class="form-input"
+                    name="companyName"
+                    [(ngModel)]="profileForm.companyName"
+                    (blur)="formatProfileCompanyName()"
+                  >
+                }
+
+                <button type="submit" class="submit-button" [disabled]="profileLoading()">
+                  {{ profileLoading() ? t.saving : t.saveProfile }}
+                </button>
+              </form>
+            }
+
+            @if (canModifyProfile && changePasswordVisible()) {
+              <form class="profile-card" (ngSubmit)="savePassword()">
+                <h2>{{ t.changePassword }}</h2>
+                <label for="oldPassword">{{ t.oldPassword }}</label>
+                <input
+                  id="oldPassword"
+                  class="form-input"
+                  type="password"
+                  name="oldPassword"
+                  [(ngModel)]="passwordForm.oldPassword"
+                  required
+                >
+
+                <label for="newPassword">{{ t.newPassword }}</label>
+                <input
+                  id="newPassword"
+                  class="form-input"
+                  type="password"
+                  name="newPassword"
+                  [(ngModel)]="passwordForm.newPassword"
+                  required
+                >
+
+                <label for="newPasswordAgain">{{ t.repeatNewPassword }}</label>
+                <input
+                  id="newPasswordAgain"
+                  class="form-input"
+                  type="password"
+                  name="newPasswordAgain"
+                  [(ngModel)]="passwordForm.newPasswordAgain"
+                  required
+                >
+
+                <button type="submit" class="submit-button" [disabled]="passwordLoading()">
+                  {{ passwordLoading() ? t.saving : t.savePassword }}
+                </button>
+              </form>
+            }
+
+          }
+
+          <h1>{{ t.profile }}</h1>
+
+          <dl class="profile-list">
+            <div>
+              <dt>{{ t.name }}</dt>
+              <dd>{{ profileName }}</dd>
+            </div>
+            <div>
+              <dt>{{ t.email }}</dt>
+              <dd>{{ profile()?.email || email() || '-' }}</dd>
+            </div>
+            <div>
+              <dt>{{ t.birthDate }}</dt>
+              <dd>{{ profile()?.birthDate || '-' }}</dd>
+            </div>
+            <div>
+              <dt>{{ t.phone }}</dt>
+              <dd>{{ profile()?.phoneNumber || '-' }}</dd>
+            </div>
+            <div>
+              <dt>{{ t.address }}</dt>
+              <dd>{{ profileAddress }}</dd>
+            </div>
+            <div>
+              <dt>{{ t.role }}</dt>
+              <dd>{{ profileRoleLabel || '-' }}</dd>
+            </div>
+            @if (profile()?.companyName) {
+              <div>
+                <dt>{{ t.companyName }}</dt>
+                <dd>{{ profile()?.companyName || '-' }}</dd>
+              </div>
+            }
+            @if (!isCustomerProfile) {
+              <div>
+                <dt>{{ t.taxId }}</dt>
+                <dd>{{ profile()?.taxId || '-' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t.identityCardNumber }}</dt>
+                <dd>{{ profile()?.identityCardNumber || '-' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t.socialSecurityNumber }}</dt>
+                <dd>{{ profile()?.socialSecurityNumber || '-' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t.salary }}</dt>
+                <dd>{{ formatOptionalFt(profile()?.netSalary) }}</dd>
+              </div>
+            }
+          </dl>
+        </div>
+      }
+
+      @if (selectedView() === 'team' && canUseTeamMenu) {
+        <div class="profile-view">
+          <h1>{{ t.team }}</h1>
+
+          @if (teamMessage()) {
+            <p class="status-message success">{{ teamMessage() }}</p>
+          }
+          @if (teamError()) {
+            <p class="status-message error">{{ teamError() }}</p>
+          }
+
+          @if (teamLoading()) {
+            <p class="muted-text">Betoltes...</p>
+          }
+
+          @if (canJoinTeam) {
+            @if (adminTeam()) {
+              <section class="team-card">
+                <div>
+                  <span class="eyebrow">{{ t.currentTeam }}</span>
+                  <h2>{{ adminTeam()?.name }}</h2>
+                </div>
+                <div>
+                  <span class="eyebrow">{{ t.productOwner }}</span>
+                  <p>{{ adminTeam()?.owner?.firstName }} {{ adminTeam()?.owner?.lastName }} - {{ adminTeam()?.owner?.email }}</p>
+                </div>
+                <button type="button" class="danger-button" (click)="leaveTeam()" [disabled]="teamLoading()">
+                  {{ t.leaveTeam }}
+                </button>
+              </section>
+            } @else {
+              <p class="muted-text">{{ t.noTeamYet }}</p>
+            }
+
+            <section class="team-section">
+              <div class="section-header">
+                <h2>{{ t.availableTeams }}</h2>
+                <button type="button" class="link-button" (click)="loadAdminTeams()">{{ t.refresh }}</button>
+              </div>
+
+              @if (teams().length) {
+                <div class="employee-list">
+                  @for (teamItem of teams(); track teamItem.id) {
+                    <article class="employee-row with-action">
+                      <div class="team-list-item">
+                        <strong>{{ teamItem.name }}</strong>
+                        <span>{{ t.teamOwner }}: {{ teamItem.owner.firstName }} {{ teamItem.owner.lastName }}</span>
+                        <span>{{ t.membersLabel }}: {{ teamItem.members.length }} {{ t.membersCount }}</span>
+                      </div>
+                      <button
+                        type="button"
+                        class="small-button"
+                        (click)="joinTeam(teamItem.id)"
+                        [disabled]="teamLoading() || !!adminTeam()"
+                      >
+                        {{ t.join }}
+                      </button>
+                    </article>
+                  }
+                </div>
+              } @else {
+                <p class="muted-text">{{ t.noTeams }}</p>
+              }
+            </section>
+          }
+
+          @if (canManageTeam && !team()) {
+            <form class="profile-card" (ngSubmit)="createTeam()">
+              <h2>{{ t.createTeam }}</h2>
+              <label for="teamName">{{ t.teamName }}</label>
+              <input
+                id="teamName"
+                class="form-input"
+                name="teamName"
+                [(ngModel)]="teamForm.name"
+                required
+              >
+              <button type="submit" class="submit-button" [disabled]="teamLoading()">
+                {{ t.createTeam }}
+              </button>
+            </form>
+          }
+
+          @if (canManageTeam && team()) {
+            <section class="team-card">
+              <div>
+                <span class="eyebrow">{{ t.team }}</span>
+                <h2>{{ team()?.name }}</h2>
+              </div>
+              <div>
+                <span class="eyebrow">{{ t.teamOwner }}</span>
+                <p>{{ team()?.owner?.firstName }} {{ team()?.owner?.lastName }} - {{ team()?.owner?.email }}</p>
+              </div>
+              <button type="button" class="danger-button" (click)="deleteTeam()" [disabled]="teamLoading()">
+                {{ t.deleteTeam }}
+              </button>
+            </section>
+
+            <section class="team-section">
+              <h2>{{ t.teamMembers }}</h2>
+              @if (team()?.members?.length) {
+                <div class="employee-list">
+                  @for (member of team()?.members; track member.id) {
+                    <article class="employee-row">
+                      <strong>{{ member.firstName }} {{ member.lastName }}</strong>
+                      <span>{{ member.email }}</span>
+                    </article>
+                  }
+                </div>
+              } @else {
+                <p class="muted-text">{{ t.noDeveloperInTeam }}</p>
+              }
+            </section>
+
+            <section class="team-section">
+              <div class="section-header">
+                <h2>{{ t.availableDevelopers }}</h2>
+                <button type="button" class="link-button" (click)="loadAvailableDevelopers()">{{ t.refresh }}</button>
+              </div>
+
+              <label for="developerSearch">{{ t.name }}</label>
+              <input
+                id="developerSearch"
+                class="form-input"
+                name="developerSearch"
+                [placeholder]="t.searchByName"
+                [ngModel]="developerSearch()"
+                (ngModelChange)="developerSearch.set($event)"
+              >
+
+              @if (filteredAvailableDevelopers.length) {
+                <div class="employee-list">
+                  @for (developer of filteredAvailableDevelopers; track developer.id) {
+                    <article class="employee-row with-action">
+                      <div class="record-list">
+                        <span><strong>{{ t.name }}:</strong> {{ developer.firstName }} {{ developer.lastName }}</span>
+                        <span>{{ developer.email }}</span>
+                      </div>
+                      <button type="button" class="small-button" (click)="addDeveloper(developer.id)" [disabled]="teamLoading()">
+                        {{ t.add }}
+                      </button>
+                    </article>
+                  }
+                </div>
+              } @else {
+                <p class="muted-text">{{ t.noAvailableDevelopers }}</p>
+              }
+            </section>
+          }
+        </div>
+      }
+
+      @if (selectedView() === 'task' && canUseTaskMenu) {
+        <div class="wide-view">
+          @if (canReviewProject || role() === 'ADMIN') {
+            <div class="support-actions centered-actions">
+              <button
+                type="button"
+                class="action-button"
+                [class.secondary]="!taskFormVisible()"
+                (click)="toggleTaskForm()"
+              >
+                {{ t.newTask }}
+              </button>
+            </div>
+          }
+
+          <h1>{{ t.task }}</h1>
+
+          @if (taskMessage()) {
+            <p class="status-message success">{{ taskMessage() }}</p>
+          }
+          @if (taskError()) {
+            <p class="status-message error">{{ taskError() }}</p>
+          }
+          @if (taskLoading()) {
+            <p class="muted-text">Betoltes...</p>
+          }
+
+          @if ((canReviewProject || role() === 'ADMIN') && taskFormVisible()) {
+            <form class="profile-card reverse-task-form" (ngSubmit)="createTask()">
+              <h2>{{ t.newTask }}</h2>
+
+              <label for="taskProject">{{ t.project }}</label>
+              <select id="taskProject" class="form-input" name="taskProject" [(ngModel)]="taskForm.projectId">
+                <option [ngValue]="null">{{ t.selectProject }}</option>
+                @for (project of acceptedOwnerProjects; track project.id) {
+                  <option [ngValue]="project.id">{{ project.title }}</option>
+                }
+              </select>
+
+              <label for="taskTitle">{{ t.title }}</label>
+              <input id="taskTitle" class="form-input" name="taskTitle" [(ngModel)]="taskForm.title" required>
+
+              <label for="taskLeiras">{{ t.description }}</label>
+              <textarea id="taskLeiras" class="form-input" name="taskLeiras" [(ngModel)]="taskForm.description"></textarea>
+
+              <label for="taskPriority">{{ t.priority }}</label>
+              <select id="taskPriority" class="form-input" name="taskPriority" [(ngModel)]="taskForm.priority">
+                @for (priority of taskPriorities; track priority) {
+                  <option [value]="priority">{{ priority }}</option>
+                }
+              </select>
+
+              <button type="submit" class="submit-button" [disabled]="taskLoading()">
+                {{ taskLoading() ? t.saving : t.createTaskButton }}
+              </button>
+            </form>
+          }
+
+          <section class="kanban-board" aria-label="Task tabla">
+            @for (status of taskStatuses; track status) {
+              <div
+                class="kanban-column"
+                [class.drop-ready]="dropTargetStatus() === status"
+                (dragover)="allowTaskDrop($event, status)"
+                (dragleave)="leaveTaskDrop(status)"
+                (drop)="dropTask($event, status)"
+              >
+                <div class="section-header">
+                  <h2>{{ status === 'IN_PROGRESS' ? 'WORKING' : status }}</h2>
+                  <span class="count-badge">{{ tasksByStatus(status).length }}</span>
+                </div>
+
+                @if (tasksByStatus(status).length) {
+                  <div class="task-list">
+                    @for (task of tasksByStatus(status); track task.id) {
+                      <article
+                        class="task-card"
+                        [class.dragging]="draggedTaskId() === task.id"
+                        [class.draggable-task]="canDragTask(task)"
+                        [attr.draggable]="canDragTask(task)"
+                        (dragstart)="dragTask($event, task)"
+                        (dragend)="endTaskDrag()"
+                      >
+                        <div>
+                          <strong>{{ task.title }}</strong>
+                          <span>{{ task.projectTitle }} - {{ task.priority }}</span>
+                        </div>
+                        @if (task.description) {
+                          <p>{{ task.description }}</p>
+                        }
+                        <span>Developer: {{ task.employeeName || '-' }}</span>
+
+                        @if (canTakeTask(task)) {
+                          <button type="button" class="small-button" (click)="takeTask(task.id)" [disabled]="taskLoading()">
+                            Felveszem
+                          </button>
+                        }
+                        @if (canFinishTask(task)) {
+                          <button type="button" class="small-button" (click)="finishTask(task.id)" [disabled]="taskLoading()">
+                            DONE
+                          </button>
+                        }
+                      </article>
+                    }
+                  </div>
+                } @else {
+                  <p class="muted-text">Nincs task.</p>
+                }
+              </div>
+            }
+          </section>
+        </div>
+      }
+
+      @if (selectedView() === 'dayOff' && canUseDayOffMenu) {
+        <div class="wide-view">
+          <div class="support-actions centered-actions">
+            <button
+              type="button"
+              class="action-button"
+              [class.secondary]="!dayOffFormVisible()"
+              (click)="toggleDayOffForm()"
+            >
+              {{ t.newDayOffButton }}
+            </button>
+          </div>
+
+          <h1>{{ t.dayOff }}</h1>
+
+          @if (dayOffMessage()) {
+            <p class="status-message success">{{ dayOffMessage() }}</p>
+          }
+          @if (dayOffError()) {
+            <p class="status-message error">{{ dayOffError() }}</p>
+          }
+          @if (dayOffLoading()) {
+            <p class="muted-text">Betoltes...</p>
+          }
+
+          @if (dayOffPage()?.quotas) {
+            <section class="quota-grid">
+              <div class="quota-box">
+                <span class="eyebrow">{{ t.homeOffice }} {{ dayOffPage()?.quotas?.year }}</span>
+                <strong>{{ dayOffPage()?.quotas?.homeOfficeRemaining }}</strong>
+                <span>{{ dayOffPage()?.quotas?.usedHomeOffice }} / {{ dayOffPage()?.quotas?.homeOfficeLimit }} {{ t.usedWorkdays }}</span>
+              </div>
+              <div class="quota-box">
+                <span class="eyebrow">{{ t.dayOff }} {{ dayOffPage()?.quotas?.year }}</span>
+                <strong>{{ dayOffPage()?.quotas?.dayOffRemaining }}</strong>
+                <span>{{ dayOffPage()?.quotas?.usedDayOff }} / {{ dayOffPage()?.quotas?.dayOffLimit }} {{ t.usedWorkdays }}</span>
+              </div>
+            </section>
+          }
+
+          @if (dayOffFormVisible()) {
+            <form class="profile-card reverse-task-form" (ngSubmit)="createDayOffRequest()">
+              <h2>{{ t.newDayOffRequest }}</h2>
+
+              <label for="dayOffType">{{ t.dayOffType }}</label>
+              <select id="dayOffType" class="form-input" name="dayOffType" [(ngModel)]="dayOffForm.type">
+                @for (type of dayOffTypes; track type) {
+                  <option [value]="type">{{ type }}</option>
+                }
+              </select>
+
+              <label for="dayOffKezdet">{{ t.startDate }}</label>
+              <input id="dayOffKezdet" class="form-input" type="date" name="dayOffKezdet" [(ngModel)]="dayOffForm.startDate" required>
+
+              <label for="dayOffVege">{{ t.endDate }}</label>
+              <input id="dayOffVege" class="form-input" type="date" name="dayOffVege" [(ngModel)]="dayOffForm.endDate" required>
+
+              <button type="submit" class="submit-button" [disabled]="dayOffLoading()">
+                {{ t.sendDayOffRequest }}
+              </button>
+            </form>
+          }
+
+          @if (role() === 'PRODUCT_OWNER' || role() === 'ADMIN') {
+            <section class="team-section">
+              <div class="section-header">
+                <h2>{{ t.developerRequests }}</h2>
+                <button type="button" class="link-button" (click)="loadDayOff()">{{ t.refresh }}</button>
+              </div>
+
+              <label for="developerRequestSearch">{{ t.name }}</label>
+              <input
+                id="developerRequestSearch"
+                class="form-input"
+                name="developerRequestSearch"
+                [placeholder]="t.searchByName"
+                [ngModel]="developerRequestSearch()"
+                (ngModelChange)="developerRequestSearch.set($event)"
+              >
+
+              @if (filteredPendingTeamDayOffRequests.length) {
+                <div class="employee-list">
+                  @for (request of filteredPendingTeamDayOffRequests; track request.id) {
+                    <article class="employee-row with-action">
+                      <div>
+                        <span>
+                          <strong>{{ t.requestName }}:</strong> {{ request.employeeName }}
+                          <strong>{{ t.dayOffType }}:</strong> {{ request.type }}
+                          <strong>{{ t.date }}:</strong> {{ request.startDate }} - {{ request.endDate }}
+                          <strong>{{ t.days }}:</strong> {{ request.workdays }}
+                          <strong>{{ t.email }}:</strong> {{ request.employeeEmail }}
+                        </span>
+                      </div>
+                      <div class="row-actions">
+                        <button type="button" class="small-button" (click)="approveDayOff(request.id)" [disabled]="dayOffLoading()">
+                          {{ t.approve }}
+                        </button>
+                        <button type="button" class="danger-button" (click)="rejectDayOff(request.id)" [disabled]="dayOffLoading()">
+                          {{ t.reject }}
+                        </button>
+                      </div>
+                    </article>
+                  }
+                </div>
+              } @else {
+                <p class="muted-text">{{ t.noPendingDeveloperRequests }}</p>
+              }
+            </section>
+          }
+
+          <section class="team-section">
+            <div class="section-header">
+              <h2>{{ t.myDayOffRequests }}</h2>
+              <button type="button" class="link-button" (click)="loadDayOff()">{{ t.refresh }}</button>
+            </div>
+
+            @if (dayOffPage()?.myRequests?.length) {
+              <div class="employee-list">
+                @for (request of dayOffPage()?.myRequests; track request.id) {
+                  <article class="employee-row">
+                    <span>
+                      <strong>{{ t.requestName }}:</strong> {{ request.employeeName }}
+                      <strong>{{ t.dayOffType }}:</strong> {{ request.type }}
+                      <strong>{{ t.date }}:</strong> {{ request.startDate }} - {{ request.endDate }}
+                      <strong>{{ t.days }}:</strong> {{ request.workdays }}
+                      <strong>{{ t.status }}:</strong> {{ request.status }}
+                      <strong>{{ t.approvedBy }}:</strong> {{ request.approvedByName || '-' }}
+                    </span>
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="muted-text">{{ t.noOwnDayOffRequests }}</p>
+            }
+          </section>
+        </div>
+      }
+
+      @if (selectedView() === 'support' && canUseSupportMenu) {
+        <div class="wide-view">
+          <div class="support-actions">
+            @if (canAdministerPasswords) {
+              <button
+                type="button"
+                class="action-button"
+                [class.secondary]="!adminPasswordPanelVisible()"
+                (click)="toggleAdminPasswordPanel()"
+              >
+                {{ t.changeEmployeePassword }}
+              </button>
+            }
+
+            <button
+              type="button"
+              class="action-button"
+              [class.secondary]="!ticketFormVisible()"
+              (click)="toggleTicketForm()"
+            >
+              {{ t.newTicket }}
+            </button>
+          </div>
+
+          <h1>IT support</h1>
+
+          @if (canAdministerPasswords && adminPasswordPanelVisible()) {
+            <form class="profile-card inline-support-form" (ngSubmit)="saveAdminPassword()">
+              <h2>{{ t.changeEmployeePassword }}</h2>
+
+              <label for="adminPasswordEmail">{{ t.employeeEmail }}</label>
+              <input
+                id="adminPasswordEmail"
+                class="form-input"
+                type="email"
+                name="adminPasswordEmail"
+                [(ngModel)]="adminPasswordForm.targetEmail"
+                required
+              >
+
+              <label for="adminNewPassword">{{ t.newPassword }}</label>
+              <input
+                id="adminNewPassword"
+                class="form-input"
+                type="password"
+                name="adminNewPassword"
+                [(ngModel)]="adminPasswordForm.newPassword"
+                required
+              >
+
+              <label for="adminNewPasswordAgain">{{ t.repeatNewPassword }}</label>
+              <input
+                id="adminNewPasswordAgain"
+                class="form-input"
+                type="password"
+                name="adminNewPasswordAgain"
+                [(ngModel)]="adminPasswordForm.newPasswordAgain"
+                required
+              >
+
+              <button type="submit" class="submit-button" [disabled]="passwordLoading()">
+                {{ passwordLoading() ? t.saving : t.saveEmployeePassword }}
+              </button>
+            </form>
+          }
+
+          @if (passwordMessage()) {
+            <p class="status-message success">{{ passwordMessage() }}</p>
+          }
+          @if (passwordError()) {
+            <p class="status-message error">{{ passwordError() }}</p>
+          }
+          @if (ticketMessage()) {
+            <p class="status-message success">{{ ticketMessage() }}</p>
+          }
+          @if (ticketError()) {
+            <p class="status-message error">{{ ticketError() }}</p>
+          }
+          @if (ticketLoading()) {
+            <p class="muted-text">{{ t.loading }}</p>
+          }
+
+          @if (ticketFormVisible()) {
+            <form class="profile-card inline-support-form" (ngSubmit)="createTicket()">
+              <h2>{{ t.newTicket }}</h2>
+
+              <label for="ticketType">{{ t.ticketType }}</label>
+              <select id="ticketType" class="form-input" name="ticketType" [(ngModel)]="ticketForm.type">
+                @for (type of ticketTypes; track type) {
+                  <option [value]="type">{{ type }}</option>
+                }
+              </select>
+
+              <label for="ticketProblema">{{ t.problem }}</label>
+              <textarea id="ticketProblema" class="form-input" name="ticketProblema" [(ngModel)]="ticketForm.problem" required></textarea>
+
+              <button type="submit" class="submit-button" [disabled]="ticketLoading()">
+                {{ ticketLoading() ? t.saving : t.createTicketButton }}
+              </button>
+            </form>
+          }
+
+          <section class="team-section">
+            <div class="section-header">
+              <h2>{{ canHandleTickets ? t.manageableTickets : t.myTickets }}</h2>
+              <button type="button" class="link-button" (click)="loadTickets()">{{ t.refresh }}</button>
+            </div>
+
+            @if (tickets().length) {
+              <div class="employee-list">
+                @for (ticket of tickets(); track ticket.id) {
+                  <article class="employee-row with-action">
+                    <div class="record-list">
+                      <strong>#{{ ticket.id }} - {{ ticket.type }} - {{ ticket.status }}</strong>
+                      <span><strong>{{ t.createdBy }}:</strong> {{ ticket.createdByEmail }}</span>
+                      <span><strong>{{ t.problem }}:</strong> {{ ticket.problem }}</span>
+                    </div>
+                    @if (canHandleTickets) {
+                      <div class="row-actions">
+                        @for (status of ticketStatuses; track status) {
+                          <button
+                            type="button"
+                            class="small-button"
+                            (click)="updateTicketStatus(ticket.id, status)"
+                            [disabled]="ticketLoading() || ticket.status === status"
+                          >
+                            {{ status }}
+                          </button>
+                        }
+                      </div>
+                    }
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="muted-text">Nincs jegy.</p>
+            }
+          </section>
+        </div>
+      }
+
+      @if (selectedView() === 'hr' && canUseHumanResources) {
+        <div class="wide-view">
+          <div class="support-actions centered-actions">
+            <button
+              type="button"
+              class="action-button"
+              [class.secondary]="!hrFormVisible()"
+              (click)="toggleHrForm()"
+            >
+              {{ t.newEmployeeButton }}
+            </button>
+          </div>
+
+          <h1>{{ t.humanResources }}</h1>
+
+          @if (hrMessage()) {
+            <p class="status-message success">{{ hrMessage() }}</p>
+          }
+          @if (hrError()) {
+            <p class="status-message error">{{ hrError() }}</p>
+          }
+          @if (hrLoading()) {
+            <p class="muted-text">Betoltes...</p>
+          }
+
+          @if (hrFormVisible()) {
+            <form class="profile-card hr-form" (ngSubmit)="saveEmployee()">
+              <div class="section-header">
+                <h2>{{ selectedEmployee() ? t.editEmployeeForm : t.newEmployeeForm }}</h2>
+                <button type="button" class="link-button" (click)="newEmployee()">{{ t.newForm }}</button>
+              </div>
+
+              <label>{{ t.firstName }}</label>
+              <input class="form-input" name="employeeKeresztname" [(ngModel)]="employeeForm.firstName" required>
+
+              <label>{{ t.lastName }}</label>
+              <input class="form-input" name="employeeVezetekname" [(ngModel)]="employeeForm.lastName" required>
+
+              <label>{{ t.email }}</label>
+              <input class="form-input" type="email" name="employeeEmail" [(ngModel)]="employeeForm.email" required>
+
+              <label>Password {{ selectedEmployee() ? '(leave empty to keep unchanged)' : '' }}</label>
+              <input class="form-input" type="password" name="employeePassword" [(ngModel)]="employeeForm.password">
+
+              <label>{{ t.birthDate }}</label>
+              <input class="form-input" type="date" name="employeeSzuletesiDatum" [(ngModel)]="employeeForm.birthDate">
+
+              <label>{{ t.phone }}</label>
+              <input class="form-input" name="employeeTelefonszam" [(ngModel)]="employeeForm.phoneNumber">
+
+              <label>{{ t.address }}</label>
+              <input class="form-input" name="employeeAddress" [(ngModel)]="employeeForm.address">
+
+              <label>{{ t.city }}</label>
+              <input class="form-input" name="employeeVaros" [(ngModel)]="employeeForm.city">
+
+              <label>{{ t.postalCode }}</label>
+              <input class="form-input" name="employeeIranyitoszam" [(ngModel)]="employeeForm.postalCode">
+
+              <label>{{ t.houseNumber }}</label>
+              <input class="form-input" name="employeeHazszam" [(ngModel)]="employeeForm.houseNumber">
+
+              <label>{{ t.role }}</label>
+              <select class="form-input" name="employeeRole" [(ngModel)]="employeeForm.role">
+                @for (roleOption of employeeRoles; track roleOption) {
+                  <option [value]="roleOption">{{ roleLabel(roleOption) }}</option>
+                }
+              </select>
+
+              <label>{{ t.taxId }}</label>
+              <input class="form-input" name="employeeAdoazonosito" [(ngModel)]="employeeForm.taxId">
+
+              <label>{{ t.identityCardNumber }}</label>
+              <input class="form-input" name="employeeSzemelyiIgazolvanySzam" [(ngModel)]="employeeForm.identityCardNumber">
+
+              <label>{{ t.socialSecurityNumber }}</label>
+              <input class="form-input" name="employeeTajSzam" [(ngModel)]="employeeForm.socialSecurityNumber">
+
+              <label>{{ t.salary }}</label>
+              <input class="form-input" type="number" [min]="minimumGrossSalary" step="1" name="employeeFizetes" [(ngModel)]="employeeForm.salary">
+
+              <label class="checkbox-label">
+                <input type="checkbox" name="employeeActive" [(ngModel)]="employeeForm.active">
+                {{ t.active }}
+              </label>
+
+              <button type="submit" class="submit-button" [disabled]="hrLoading()">
+                {{ hrLoading() ? t.saving : t.saveEmployee }}
+              </button>
+            </form>
+          }
+
+          <section class="team-section">
+            <div class="section-header">
+              <h2>{{ t.employeesTitle }}</h2>
+              <button type="button" class="link-button" (click)="loadEmployees()">{{ t.refresh }}</button>
+            </div>
+
+            <label for="employeeSearch">{{ t.name }}</label>
+            <input
+              id="employeeSearch"
+              class="form-input"
+              name="employeeSearch"
+              [placeholder]="t.searchByName"
+              [ngModel]="employeeSearch()"
+              (ngModelChange)="employeeSearch.set($event)"
+            >
+
+            @if (filteredEmployees.length) {
+              <div class="employee-list">
+                @for (employee of filteredEmployees; track employee.id) {
+                  <article class="employee-row with-action">
+                    <div class="record-list">
+                      <span><strong>{{ t.name }}:</strong> {{ employee.firstName }} {{ employee.lastName }}</span>
+                      <span><strong>{{ t.role }}:</strong> {{ roleLabel(employee.role) }}</span>
+                    </div>
+                    <div class="row-actions">
+                      <button type="button" class="small-button" (click)="editEmployee(employee)">
+                        {{ t.edit }}
+                      </button>
+                      <button type="button" class="danger-button" (click)="deactivateEmployee(employee)" [disabled]="!employee.active || hrLoading()">
+                        {{ t.deactivate }}
+                      </button>
+                    </div>
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="muted-text">{{ t.noEmployees }}</p>
+            }
+          </section>
+        </div>
+      }
+
+      @if (selectedView() === 'project' && canUseProjectMenu) {
+        <div class="wide-view">
+          @if (canCreateProject) {
+            <div class="support-actions centered-actions">
+              <button
+                type="button"
+                class="action-button"
+                [class.secondary]="!projectFormVisible()"
+                (click)="toggleProjectForm()"
+              >
+                {{ t.newProject }}
+              </button>
+            </div>
+          }
+
+          <h1>{{ t.project }}</h1>
+
+          @if (projectMessage()) {
+            <p class="status-message success">{{ projectMessage() }}</p>
+          }
+          @if (projectError()) {
+            <p class="status-message error">{{ projectError() }}</p>
+          }
+          @if (projectLoading()) {
+            <p class="muted-text">Betoltes...</p>
+          }
+
+          @if (canCreateProject && projectFormVisible()) {
+            <form class="profile-card reverse-task-form" (ngSubmit)="createProject()">
+              <h2>{{ t.newProject }}</h2>
+
+              <label for="projectTitle">{{ t.title }}</label>
+              <input id="projectTitle" class="form-input" name="projectTitle" [(ngModel)]="projectForm.title" required>
+
+              <label for="projectLeiras">{{ t.description }}</label>
+              <textarea id="projectLeiras" class="form-input" name="projectLeiras" [(ngModel)]="projectForm.description"></textarea>
+
+              <label for="projectBudget">{{ t.projectBudget }}</label>
+              <input id="projectBudget" class="form-input" type="number" min="5000000" name="projectBudget" [(ngModel)]="projectForm.budget">
+
+              <label for="projectHatarido">{{ t.deadline }}</label>
+              <input id="projectHatarido" class="form-input" type="date" name="projectHatarido" [(ngModel)]="projectForm.deadline" required>
+
+              <button type="submit" class="submit-button" [disabled]="projectLoading()">
+                {{ projectLoading() ? t.saving : t.createProjectButton }}
+              </button>
+            </form>
+          }
+
+          @if (canReviewProject) {
+            <section class="team-section">
+              <div class="section-header">
+                <h2>{{ t.pendingProjectsTitle }}</h2>
+                <button type="button" class="link-button" (click)="loadProjects()">{{ t.refresh }}</button>
+              </div>
+
+              <label for="pendingProjectSearch">{{ t.title }}</label>
+              <input
+                id="pendingProjectSearch"
+                class="form-input"
+                name="pendingProjectSearch"
+                [placeholder]="t.searchByTitle"
+                [ngModel]="pendingProjectSearch()"
+                (ngModelChange)="pendingProjectSearch.set($event)"
+              >
+
+              @if (filteredPendingProjects.length) {
+                <div class="employee-list">
+                  @for (project of filteredPendingProjects; track project.id) {
+                    <article class="employee-row with-action">
+                      <div class="record-list">
+                        <span><strong>{{ t.title }}:</strong> {{ project.title }}</span>
+                        <span><strong>{{ t.description }}:</strong> {{ project.description || '-' }}</span>
+                        <span><strong>{{ t.date }}:</strong> {{ project.startDate }} - {{ project.deadline }}</span>
+                        <span><strong>{{ t.cost }}:</strong> {{ formatFt(project.budget) }}</span>
+                        <span><strong>{{ t.team }}:</strong> {{ project.teamName || '-' }}</span>
+                        <span><strong>{{ t.status }}:</strong> {{ project.status }}</span>
+                      </div>
+                      <div class="row-actions">
+                        <button type="button" class="small-button" (click)="acceptProject(project.id)" [disabled]="projectLoading()">
+                          {{ t.approve }}
+                        </button>
+                        <button type="button" class="danger-button" (click)="rejectProject(project.id)" [disabled]="projectLoading()">
+                          {{ t.reject }}
+                        </button>
+                      </div>
+                    </article>
+                  }
+                </div>
+              } @else {
+                <p class="muted-text">{{ t.noPendingProjects }}</p>
+              }
+            </section>
+          }
+
+          <section class="team-section">
+            <div class="section-header">
+              <h2>{{ t.projectsTitle }}</h2>
+              <button type="button" class="link-button" (click)="loadProjects()">{{ t.refresh }}</button>
+            </div>
+
+            @if (projects().length) {
+              <div class="employee-list">
+                @for (project of projects(); track project.id) {
+                  <article class="employee-row with-action">
+                    <div class="record-list">
+                      <span><strong>{{ t.title }}:</strong> {{ project.title }}</span>
+                      <span><strong>{{ t.description }}:</strong> {{ project.description || '-' }}</span>
+                      <span><strong>{{ t.date }}:</strong> {{ project.startDate }} - {{ project.deadline }}</span>
+                      <span><strong>{{ t.cost }}:</strong> {{ formatFt(project.budget) }}</span>
+                      <span><strong>{{ t.team }}:</strong> {{ project.teamName || '-' }}</span>
+                      <span><strong>{{ t.status }}:</strong> {{ project.status }}</span>
+                    </div>
+                    @if (canReviewProject && project.status === 'ACCEPTED' && project.productOwnerEmail === email()) {
+                      <button type="button" class="small-button" (click)="completeProject(project.id)" [disabled]="projectLoading()">
+                        COMPLETED
+                      </button>
+                    }
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="muted-text">Nincs project.</p>
+            }
+          </section>
+        </div>
+      }
+
+      @if (selectedView() === 'statistics' && canUseStatistics) {
+        <div class="wide-view statistics-view">
+          <div class="section-header">
+            <h1>{{ t.statistics }}</h1>
+            <div class="year-switcher" [attr.aria-label]="t.year">
+              <label class="visually-hidden" for="statisticsYear">{{ t.year }}</label>
+              <select
+                id="statisticsYear"
+                class="form-input year-select"
+                [ngModel]="statisticsYear()"
+                (ngModelChange)="setStatisticsYear($event)"
+              >
+                @for (year of statisticsYears; track year) {
+                  <option [ngValue]="year">{{ year }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          @if (statisticsError()) {
+            <p class="status-message error">{{ statisticsError() }}</p>
+          }
+          @if (statisticsLoading()) {
+            <p class="muted-text">{{ t.loading }}</p>
+          }
+
+          @if (statistics()) {
+            <section class="stats-grid">
+              <article class="stats-panel">
+                <div class="section-header">
+                  <h2>{{ t.users }}</h2>
+                </div>
+
+                <div class="pie-wrap">
+                  <div class="pie-chart" [style.background]="pieChartStyle"></div>
+                  <div class="pie-hole">{{ roleSlices.length }}</div>
+                </div>
+
+                <div class="legend-list">
+                  @for (slice of roleSlices; track slice.role) {
+                    <div class="legend-row">
+                      <span class="legend-color" [style.background]="slice.color"></span>
+                      <strong>{{ roleLabel(slice.role) }}</strong>
+                      <span>{{ slice.count }} fo</span>
+                    </div>
+                  }
+                </div>
+              </article>
+
+              <article class="stats-panel">
+                <div class="section-header">
+                  <h2>{{ statisticsYear() }} {{ t.yearlyResult }}</h2>
+                </div>
+
+                <div class="bar-chart" [attr.aria-label]="t.monthlyChartLabel">
+                  @for (month of monthlyFinances; track month.month) {
+                    <div class="bar-item">
+                      <div class="bar-stack">
+                        @if (month.profit >= 0) {
+                          <div
+                            class="bar positive"
+                            [style.height.px]="monthlyBarHeight(month)"
+                            [title]="monthLabel(month) + ': ' + formatFt(month.profit)"
+                          ></div>
+                        } @else {
+                          <div
+                            class="bar negative"
+                            [style.height.px]="monthlyBarHeight(month)"
+                            [title]="monthLabel(month) + ': ' + formatFt(month.profit)"
+                          ></div>
+                        }
+                      </div>
+                      <span>{{ month.month }}.</span>
+                    </div>
+                  }
+                </div>
+
+                <div class="employee-list">
+                  @for (month of monthlyFinances; track month.month) {
+                    <article class="employee-row finance-row">
+                      <strong>{{ monthLabel(month) }}</strong>
+                      <span>{{ t.result }}: {{ formatFt(month.profit) }}</span>
+                      <span>{{ t.projectIncome }}: {{ formatFt(month.projectIncome) }} | {{ t.salaryCost }}: {{ formatFt(month.salaryCost) }}</span>
+                      <span>{{ t.balance }}: {{ formatFt(month.balanceAfter) }}</span>
+                    </article>
+                  }
+                </div>
+              </article>
+            </section>
+          }
+        </div>
+      }
+    </section>
+  </div>
+</main>

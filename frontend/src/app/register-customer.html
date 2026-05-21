@@ -1,0 +1,108 @@
+<main class="register-page">
+  <section class="register-shell">
+    <div class="settings-toolbar" aria-label="Settings">
+      <div class="btn-group btn-group-sm" role="group" [attr.aria-label]="t.language">
+        <button type="button" class="btn btn-outline-secondary" [class.active]="ui.language() === 'hu'" (click)="setLanguage('hu')">HU</button>
+        <button type="button" class="btn btn-outline-secondary" [class.active]="ui.language() === 'en'" (click)="setLanguage('en')">EN</button>
+      </div>
+
+      <div class="btn-group btn-group-sm" role="group" [attr.aria-label]="t.theme">
+        <button type="button" class="btn btn-outline-secondary" [class.active]="ui.theme() === 'light'" (click)="setTheme('light')">Light</button>
+        <button type="button" class="btn btn-outline-secondary" [class.active]="ui.theme() === 'dark'" (click)="setTheme('dark')">Dark</button>
+      </div>
+    </div>
+
+    <div class="register-panel">
+      <div class="panel-header">{{ t.header }}</div>
+      <div class="panel-body">
+        <form novalidate (ngSubmit)="registeredEmail() && !activated() ? activate() : register()">
+          @if (!registeredEmail() && !activated()) {
+            <div class="form-grid">
+              <div class="form-field half">
+                <label for="firstName" class="form-label">{{ t.firstName }}</label>
+                <input id="firstName" type="text" class="form-control" name="firstName" [(ngModel)]="form.firstName" required>
+              </div>
+
+              <div class="form-field half">
+                <label for="lastName" class="form-label">{{ t.lastName }}</label>
+                <input id="lastName" type="text" class="form-control" name="lastName" [(ngModel)]="form.lastName" required>
+              </div>
+
+              <div class="form-field full">
+                <label for="email" class="form-label">{{ t.email }}</label>
+                <input id="email" type="email" class="form-control" name="email" [(ngModel)]="form.email" required>
+              </div>
+
+              <div class="form-field full">
+                <label for="password" class="form-label">{{ t.password }}</label>
+                <input id="password" type="password" class="form-control" name="password" [(ngModel)]="form.password" required>
+              </div>
+
+              <div class="form-field full">
+                <label for="passwordAgain" class="form-label">{{ t.passwordAgain }}</label>
+                <input id="passwordAgain" type="password" class="form-control" name="passwordAgain" [(ngModel)]="form.passwordAgain" required>
+              </div>
+
+              <div class="form-field full">
+                <label for="birthDate" class="form-label">{{ t.birthDate }}</label>
+                <input id="birthDate" type="date" class="form-control" name="birthDate" [(ngModel)]="form.birthDate" required>
+              </div>
+
+              <div class="form-field full">
+                <label for="phoneNumber" class="form-label">{{ t.phone }}</label>
+                <input id="phoneNumber" type="text" class="form-control" name="phoneNumber" [(ngModel)]="form.phoneNumber" required>
+              </div>
+
+              <div class="form-field half">
+                <label for="postalCode" class="form-label">{{ t.postalCode }}</label>
+                <input id="postalCode" type="text" class="form-control" name="postalCode" [(ngModel)]="form.postalCode" required>
+              </div>
+
+              <div class="form-field half">
+                <label for="city" class="form-label">{{ t.city }}</label>
+                <input id="city" type="text" class="form-control" name="city" [(ngModel)]="form.city" required>
+              </div>
+
+              <div class="form-field half">
+                <label for="address" class="form-label">{{ t.address }}</label>
+                <input id="address" type="text" class="form-control" name="address" [(ngModel)]="form.address" required>
+              </div>
+
+              <div class="form-field half">
+                <label for="houseNumber" class="form-label">{{ t.houseNumber }}</label>
+                <input id="houseNumber" type="text" class="form-control" name="houseNumber" [(ngModel)]="form.houseNumber" required>
+              </div>
+
+              <div class="form-field full">
+                <label for="companyName" class="form-label">{{ t.company }}</label>
+                <input id="companyName" type="text" class="form-control" name="companyName" [(ngModel)]="form.companyName" (blur)="formatCompanyName()">
+              </div>
+            </div>
+          } @else if (!activated()) {
+            <div class="activation-box">
+              <label for="activationToken" class="form-label"><b>{{ t.activationCode }}</b></label>
+              <input id="activationToken" class="form-control activation-input" type="text" name="activationToken" [placeholder]="t.activationCodePlaceholder" [(ngModel)]="activationToken" required>
+            </div>
+          }
+
+          @if (message()) {
+            <div class="alert alert-success py-2">{{ message() }}</div>
+          }
+
+          @if (error()) {
+            <div class="alert alert-danger py-2">{{ error() }}</div>
+          }
+
+          <div class="actions">
+            @if (!activated()) {
+            <button class="btn btn-primary btn-sm" type="submit" [disabled]="loading()">
+              {{ loading() ? t.saving : (registeredEmail() ? t.activate : t.submit) }}
+            </button>
+            }
+            <a class="btn btn-outline-secondary btn-sm" routerLink="/login">{{ t.back }}</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
