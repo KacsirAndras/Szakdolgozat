@@ -7,7 +7,7 @@
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:ui": "playwright test --ui",
-    "record": "playwright codegen http://localhost:4200/"
+    "record": "playwright codegen --browser=firefox http://localhost:4200/"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1"

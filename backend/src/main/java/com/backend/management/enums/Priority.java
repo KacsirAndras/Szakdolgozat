@@ -1,6 +1,6 @@
 package com.backend.management.enums;
 
-public enum Prioritas {
+public enum Priority {
     LOW,
     MEDIUM,
     HIGH

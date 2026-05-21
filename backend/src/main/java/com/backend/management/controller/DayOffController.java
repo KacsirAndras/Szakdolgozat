@@ -17,14 +17,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.backend.management.enums.Szerepkor;
-import com.backend.management.enums.TavolletStatusz;
-import com.backend.management.enums.TavolletTipus;
-import com.backend.management.model.Alkalmazott;
-import com.backend.management.model.Felhasznalo;
-import com.backend.management.model.Tavollet;
-import com.backend.management.repository.AlkalmazottRepository;
-import com.backend.management.repository.TavolletRepository;
+import com.backend.management.enums.Role;
+import com.backend.management.enums.DayOffStatus;
+import com.backend.management.enums.DayOffType;
+import com.backend.management.model.Employee;
+import com.backend.management.model.User;
+import com.backend.management.model.DayOff;
+import com.backend.management.repository.EmployeeRepository;
+import com.backend.management.repository.DayOffRepository;
 
 @RestController
 @RequestMapping("/api/day-off")
@@ -33,35 +33,35 @@ public class DayOffController {
 
     private static final int HOME_OFFICE_LIMIT = 150;
 
-    private final TavolletRepository tavolletRepository;
-    private final AlkalmazottRepository alkalmazottRepository;
+    private final DayOffRepository dayOffRepository;
+    private final EmployeeRepository employeeRepository;
 
-    public DayOffController(TavolletRepository tavolletRepository,
-                            AlkalmazottRepository alkalmazottRepository) {
-        this.tavolletRepository = tavolletRepository;
-        this.alkalmazottRepository = alkalmazottRepository;
+    public DayOffController(DayOffRepository dayOffRepository,
+                            EmployeeRepository employeeRepository) {
+        this.dayOffRepository = dayOffRepository;
+        this.employeeRepository = employeeRepository;
     }
 
     @GetMapping
-    public ResponseEntity<?> listazas(@RequestParam String email) {
+    public ResponseEntity<?> listDayOffs(@RequestParam String email) {
 
-        Alkalmazott alkalmazott = alkalmazottRepository.findByEmailIgnoreCase(email).orElse(null);
+        Employee employee = employeeRepository.findByEmailIgnoreCase(email).orElse(null);
 
-        if (alkalmazott == null || !alkalmazott.isActive() || alkalmazott.getSzerepkor() == Szerepkor.CUSTOMER) {
+        if (employee == null || !employee.isActive() || employee.getRole() == Role.CUSTOMER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Customer nem hasznalhatja a Day off menut."));
         }
 
-        QuotaResponse quotas = keretekAlkalmazotthoz(alkalmazott, LocalDate.now().getYear());
+        QuotaResponse quotas = quotasForEmployee(employee, LocalDate.now().getYear());
 
-        List<TavolletResponse> myRequests = sajatKerelmek(alkalmazott, email)
+        List<DayOffResponse> myRequests = ownRequests(employee, email)
                 .stream()
-                .map(this::valassaAlakitas)
+                .map(this::toResponse)
                 .toList();
 
-        List<TavolletResponse> teamRequests = jovahagyhatoKerelmek(alkalmazott, email)
+        List<DayOffResponse> teamRequests = approvableRequests(employee, email)
                 .stream()
-                .map(this::valassaAlakitas)
+                .map(this::toResponse)
                 .toList();
 
         return ResponseEntity.ok(new DayOffPageResponse(
@@ -72,354 +72,354 @@ public class DayOffController {
     }
 
     @PostMapping
-    public ResponseEntity<?> keres(@RequestParam String email, @RequestBody DayOffRequest keres) {
+    public ResponseEntity<?> request(@RequestParam String email, @RequestBody DayOffRequest request) {
 
-        Alkalmazott alkalmazott = alkalmazottRepository.findByEmailIgnoreCase(email).orElse(null);
+        Employee employee = employeeRepository.findByEmailIgnoreCase(email).orElse(null);
 
-        if (alkalmazott == null || !alkalmazott.isActive()) {
+        if (employee == null || !employee.isActive()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Nem aktiv vagy nem letezo felhasznalo."));
+                    .body(Map.of("message", "Nem aktiv vagy nem letezo user."));
         }
 
-        if (alkalmazott.getSzerepkor() == Szerepkor.CUSTOMER) {
+        if (employee.getRole() == Role.CUSTOMER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Customer nem kerhet tavolletet."));
+                    .body(Map.of("message", "Customer nem kerhet dayOffet."));
         }
 
-        if (keres == null || keres.tipus() == null || keres.kezdet() == null || keres.vege() == null) {
+        if (request == null || request.type() == null || request.startDate() == null || request.endDate() == null) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Tipus, kezdet es vege kotelezo."));
+                    .body(Map.of("message", "Type, startDate and endDate are required."));
         }
 
-        if (keres.vege().isBefore(keres.kezdet())) {
+        if (request.endDate().isBefore(request.startDate())) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "A vege nem lehet korabban, mint a kezdet."));
+                    .body(Map.of("message", "A endDate nem lehet korabban, mint a startDate."));
         }
 
-        if (keres.kezdet().getYear() != keres.vege().getYear()) {
+        if (request.startDate().getYear() != request.endDate().getYear()) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Egy kerelem csak egy naptari even belul lehet."));
         }
 
-        int munkanapok = munkanapokSzamolasa(keres.kezdet(), keres.vege());
+        int workdays = countWorkdays(request.startDate(), request.endDate());
 
-        if (munkanapok == 0) {
+        if (workdays == 0) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "A kivalasztott idoszakban nincs munkanap."));
         }
 
-        int ev = keres.kezdet().getYear();
+        int year = request.startDate().getYear();
         int limit;
 
-        if (keres.tipus() == TavolletTipus.HOME_OFFICE) {
+        if (request.type() == DayOffType.HOME_OFFICE) {
             limit = HOME_OFFICE_LIMIT;
         } else {
-            limit = evesSzabadsagKeret(alkalmazott, ev);
+            limit = annualDayOffQuota(employee, year);
         }
 
-        int used = felhasznaltNapok(alkalmazott, keres.tipus(), ev);
+        int used = usedDays(employee, request.type(), year);
 
-        if (used + munkanapok > limit) {
+        if (used + workdays > limit) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message",
-                    "Nincs eleg keret. Keret: " + limit + ", mar foglalt: " + used + ", igenyelt: " + munkanapok + "."
+                    "Nincs eleg keret. Keret: " + limit + ", mar foglalt: " + used + ", igenyelt: " + workdays + "."
             ));
         }
 
-        boolean overlap = atfedesVanE(alkalmazott, keres.kezdet(), keres.vege());
+        boolean overlap = hasOverlap(employee, request.startDate(), request.endDate());
 
         if (overlap) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Erre az idoszakra mar van PENDING vagy APPROVED tavolleted."));
+                    .body(Map.of("message", "Erre az idoszakra mar van PENDING vagy APPROVED dayOffed."));
         }
 
-        Tavollet tavollet = new Tavollet(
-                alkalmazott,
+        DayOff dayOff = new DayOff(
+                employee,
                 null,
-                keres.tipus(),
-                keres.kezdet(),
-                keres.vege()
+                request.type(),
+                request.startDate(),
+                request.endDate()
         );
 
-        tavollet.setMunkanapok(munkanapok);
+        dayOff.setWorkdays(workdays);
 
-        Tavollet mentett = tavolletRepository.save(tavollet);
+        DayOff saved = dayOffRepository.save(dayOff);
 
-        return ResponseEntity.ok(valassaAlakitas(mentett));
+        return ResponseEntity.ok(toResponse(saved));
     }
 
-    @PostMapping("/{id}/jovahagyas")
-    public ResponseEntity<?> jovahagyas(@PathVariable Long id, @RequestParam String email) {
-        return jovahagyasVagyElutasitas(id, email, TavolletStatusz.APPROVED);
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<?> approve(@PathVariable Long id, @RequestParam String email) {
+        return approveOrReject(id, email, DayOffStatus.APPROVED);
     }
 
-    @PostMapping("/{id}/elutasitas")
-    public ResponseEntity<?> elutasitas(@PathVariable Long id, @RequestParam String email) {
-        return jovahagyasVagyElutasitas(id, email, TavolletStatusz.REJECTED);
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<?> reject(@PathVariable Long id, @RequestParam String email) {
+        return approveOrReject(id, email, DayOffStatus.REJECTED);
     }
 
-    private ResponseEntity<?> jovahagyasVagyElutasitas(Long id, String email, TavolletStatusz statusz) {
+    private ResponseEntity<?> approveOrReject(Long id, String email, DayOffStatus status) {
 
-        Alkalmazott jovahagyo = alkalmazottRepository.findByEmailIgnoreCase(email).orElse(null);
+        Employee approver = employeeRepository.findByEmailIgnoreCase(email).orElse(null);
 
-        if (jovahagyo == null || !jovahagyo.isActive()) {
+        if (approver == null || !approver.isActive()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv felhasznalo hagyhat jova tavolletet."));
+                    .body(Map.of("message", "Csak aktiv user hagyhat jova dayOffet."));
         }
 
-        if (jovahagyo.getSzerepkor() != Szerepkor.ADMIN &&
-                jovahagyo.getSzerepkor() != Szerepkor.PRODUCT_OWNER) {
+        if (approver.getRole() != Role.ADMIN &&
+                approver.getRole() != Role.PRODUCT_OWNER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak ADMIN vagy PRODUCT_OWNER hagyhat jova tavolletet."));
+                    .body(Map.of("message", "Csak ADMIN vagy PRODUCT_OWNER hagyhat jova dayOffet."));
         }
 
-        Tavollet tavollet = tavolletRepository.findById(id).orElse(null);
+        DayOff dayOff = dayOffRepository.findById(id).orElse(null);
 
-        if (tavollet == null) {
+        if (dayOff == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Nincs ilyen tavollet."));
+                    .body(Map.of("message", "Nincs ilyen dayOff."));
         }
 
-        if (tavollet.getStatusz() != TavolletStatusz.PENDING) {
+        if (dayOff.getStatus() != DayOffStatus.PENDING) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Csak PENDING kerelem kezelheto."));
         }
 
-        if (jovahagyo.getSzerepkor() != Szerepkor.ADMIN) {
+        if (approver.getRole() != Role.ADMIN) {
 
-            if (tavollet.getMunkatars().getSzerepkor() != Szerepkor.DEVELOPER) {
+            if (dayOff.getEmployee().getRole() != Role.DEVELOPER) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("message", "Csak DEVELOPER tavollete hagyhato jova."));
+                        .body(Map.of("message", "Csak DEVELOPER dayOffe hagyhato jova."));
             }
 
-            if (tavollet.getMunkatars().getCsapat() == null) {
+            if (dayOff.getEmployee().getTeam() == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("message", "A munkatarsnak nincs csapata."));
+                        .body(Map.of("message", "A employeenak nincs teama."));
             }
 
-            if (tavollet.getMunkatars().getCsapat().getTulajdonos() == null) {
+            if (dayOff.getEmployee().getTeam().getOwner() == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("message", "A csapatnak nincs tulajdonos-je."));
+                        .body(Map.of("message", "A teamnak nincs owner-je."));
             }
 
-            if (!tavollet.getMunkatars().getCsapat().getTulajdonos().getId().equals(jovahagyo.getId())) {
+            if (!dayOff.getEmployee().getTeam().getOwner().getId().equals(approver.getId())) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("message", "Csak a sajat csapatod developereinek tavolletet hagyhatod jova."));
+                        .body(Map.of("message", "Csak a sajat teamod developereinek dayOffet hagyhatod jova."));
             }
         }
 
-        tavollet.setStatusz(statusz);
-        tavollet.setJovahagyta(jovahagyo);
+        dayOff.setStatus(status);
+        dayOff.setApprovedBy(approver);
 
-        Tavollet mentett = tavolletRepository.save(tavollet);
+        DayOff saved = dayOffRepository.save(dayOff);
 
-        return ResponseEntity.ok(valassaAlakitas(mentett));
+        return ResponseEntity.ok(toResponse(saved));
     }
 
-    private QuotaResponse keretekAlkalmazotthoz(Alkalmazott alkalmazott, int ev) {
+    private QuotaResponse quotasForEmployee(Employee employee, int year) {
 
-        int felhasznaltHomeOffice = felhasznaltNapok(alkalmazott, TavolletTipus.HOME_OFFICE, ev);
-        int szabadsagKeret = evesSzabadsagKeret(alkalmazott, ev);
-        int felhasznaltSzabadsag = felhasznaltNapok(alkalmazott, TavolletTipus.DAY_OFF, ev);
+        int usedHomeOffice = usedDays(employee, DayOffType.HOME_OFFICE, year);
+        int dayOffQuota = annualDayOffQuota(employee, year);
+        int usedDayOff = usedDays(employee, DayOffType.DAY_OFF, year);
 
         return new QuotaResponse(
-                ev,
+                year,
                 HOME_OFFICE_LIMIT,
-                felhasznaltHomeOffice,
-                HOME_OFFICE_LIMIT - felhasznaltHomeOffice,
-                szabadsagKeret,
-                felhasznaltSzabadsag,
-                szabadsagKeret - felhasznaltSzabadsag
+                usedHomeOffice,
+                HOME_OFFICE_LIMIT - usedHomeOffice,
+                dayOffQuota,
+                usedDayOff,
+                dayOffQuota - usedDayOff
         );
     }
 
-    private int felhasznaltNapok(Alkalmazott alkalmazott, TavolletTipus tipus, int ev) {
+    private int usedDays(Employee employee, DayOffType type, int year) {
 
-        LocalDate evKezdete = LocalDate.of(ev, 1, 1);
-        LocalDate evVege = LocalDate.of(ev, 12, 31);
+        LocalDate yearStart = LocalDate.of(year, 1, 1);
+        LocalDate yearEnd = LocalDate.of(year, 12, 31);
 
-        List<Tavollet> tavolletek =
-                tavolletRepository.findByMunkatarsIdAndTipusAndStatuszInAndKezdetBetween(
-                        alkalmazott.getId(),
-                        tipus,
-                        List.of(TavolletStatusz.PENDING, TavolletStatusz.APPROVED),
-                        evKezdete,
-                        evVege
+        List<DayOff> dayOffs =
+                dayOffRepository.findByEmployeeIdAndTypeAndStatusInAndStartDateBetween(
+                        employee.getId(),
+                        type,
+                        List.of(DayOffStatus.PENDING, DayOffStatus.APPROVED),
+                        yearStart,
+                        yearEnd
                 );
 
-        int osszeg = 0;
+        int total = 0;
 
-        for (Tavollet t : tavolletek) {
-            osszeg += t.getMunkanapok();
+        for (DayOff dayOff : dayOffs) {
+            total += dayOff.getWorkdays();
         }
 
-        return osszeg;
+        return total;
     }
 
-    private boolean atfedesVanE(Alkalmazott alkalmazott, LocalDate kezdet, LocalDate vege) {
+    private boolean hasOverlap(Employee employee, LocalDate startDate, LocalDate endDate) {
 
-        List<Tavollet> tavolletek =
-                tavolletRepository.findByMunkatarsIdAndStatuszInAndKezdetLessThanEqualAndVegeGreaterThanEqual(
-                        alkalmazott.getId(),
-                        List.of(TavolletStatusz.PENDING, TavolletStatusz.APPROVED),
-                        vege,
-                        kezdet
+        List<DayOff> dayOffs =
+                dayOffRepository.findByEmployeeIdAndStatusInAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                        employee.getId(),
+                        List.of(DayOffStatus.PENDING, DayOffStatus.APPROVED),
+                        endDate,
+                        startDate
                 );
 
-        return !tavolletek.isEmpty();
+        return !dayOffs.isEmpty();
     }
 
-    private List<Tavollet> sajatKerelmek(Alkalmazott alkalmazott, String email) {
+    private List<DayOff> ownRequests(Employee employee, String email) {
 
-        if (alkalmazott.getSzerepkor() == Szerepkor.ADMIN) {
-            return tavolletRepository.findAllByOrderByKezdetDesc();
+        if (employee.getRole() == Role.ADMIN) {
+            return dayOffRepository.findAllByOrderByStartDateDesc();
         }
 
-        return tavolletRepository.findByMunkatarsEmailIgnoreCaseOrderByKezdetDesc(email);
+        return dayOffRepository.findByEmployeeEmailIgnoreCaseOrderByStartDateDesc(email);
     }
 
-    private List<Tavollet> jovahagyhatoKerelmek(Alkalmazott alkalmazott, String email) {
+    private List<DayOff> approvableRequests(Employee employee, String email) {
 
-        if (alkalmazott.getSzerepkor() == Szerepkor.ADMIN) {
-            return tavolletRepository.findAllByOrderByKezdetDesc();
+        if (employee.getRole() == Role.ADMIN) {
+            return dayOffRepository.findAllByOrderByStartDateDesc();
         }
 
-        if (alkalmazott.getSzerepkor() == Szerepkor.PRODUCT_OWNER) {
+        if (employee.getRole() == Role.PRODUCT_OWNER) {
 
-            List<Tavollet> osszes =
-                    tavolletRepository.findByMunkatarsCsapatTulajdonosEmailIgnoreCaseOrderByKezdetDesc(email);
+            List<DayOff> all =
+                    dayOffRepository.findByEmployeeTeamOwnerEmailIgnoreCaseOrderByStartDateDesc(email);
 
-            return osszes.stream()
-                    .filter(t -> t.getMunkatars().getSzerepkor() == Szerepkor.DEVELOPER)
+            return all.stream()
+                    .filter(t -> t.getEmployee().getRole() == Role.DEVELOPER)
                     .toList();
         }
 
         return List.of();
     }
 
-    private int evesSzabadsagKeret(Alkalmazott alkalmazott, int ev) {
+    private int annualDayOffQuota(Employee employee, int year) {
 
-        if (alkalmazott.getSzuletesiDatum() == null) {
+        if (employee.getBirthDate() == null) {
             return 20;
         }
 
-        int eletkor = Period.between(
-                alkalmazott.getSzuletesiDatum(),
-                LocalDate.of(ev, 12, 31)
+        int age = Period.between(
+                employee.getBirthDate(),
+                LocalDate.of(year, 12, 31)
         ).getYears();
 
-        int plusz = 0;
+        int extraDays = 0;
 
-        if (eletkor >= 45) {
-            plusz = 10;
-        } else if (eletkor >= 43) {
-            plusz = 9;
-        } else if (eletkor >= 41) {
-            plusz = 8;
-        } else if (eletkor >= 39) {
-            plusz = 7;
-        } else if (eletkor >= 37) {
-            plusz = 6;
-        } else if (eletkor >= 35) {
-            plusz = 5;
-        } else if (eletkor >= 33) {
-            plusz = 4;
-        } else if (eletkor >= 31) {
-            plusz = 3;
-        } else if (eletkor >= 28) {
-            plusz = 2;
-        } else if (eletkor >= 25) {
-            plusz = 1;
+        if (age >= 45) {
+            extraDays = 10;
+        } else if (age >= 43) {
+            extraDays = 9;
+        } else if (age >= 41) {
+            extraDays = 8;
+        } else if (age >= 39) {
+            extraDays = 7;
+        } else if (age >= 37) {
+            extraDays = 6;
+        } else if (age >= 35) {
+            extraDays = 5;
+        } else if (age >= 33) {
+            extraDays = 4;
+        } else if (age >= 31) {
+            extraDays = 3;
+        } else if (age >= 28) {
+            extraDays = 2;
+        } else if (age >= 25) {
+            extraDays = 1;
         }
 
-        return 20 + plusz;
+        return 20 + extraDays;
     }
 
-    private int munkanapokSzamolasa(LocalDate kezdet, LocalDate vege) {
+    private int countWorkdays(LocalDate startDate, LocalDate endDate) {
 
-        int napok = 0;
-        LocalDate aktualis = kezdet;
+        int days = 0;
+        LocalDate current = startDate;
 
-        while (!aktualis.isAfter(vege)) {
+        while (!current.isAfter(endDate)) {
 
-            if (aktualis.getDayOfWeek() != DayOfWeek.SATURDAY &&
-                    aktualis.getDayOfWeek() != DayOfWeek.SUNDAY) {
-                napok++;
+            if (current.getDayOfWeek() != DayOfWeek.SATURDAY &&
+                    current.getDayOfWeek() != DayOfWeek.SUNDAY) {
+                days++;
             }
 
-            aktualis = aktualis.plusDays(1);
+            current = current.plusDays(1);
         }
 
-        return napok;
+        return days;
     }
 
-    private TavolletResponse valassaAlakitas(Tavollet tavollet) {
+    private DayOffResponse toResponse(DayOff dayOff) {
 
-        Alkalmazott munkatars = tavollet.getMunkatars();
-        Alkalmazott jovahagyta = tavollet.getJovahagyta();
+        Employee employee = dayOff.getEmployee();
+        Employee approvedBy = dayOff.getApprovedBy();
 
-        String jovahagytaNev = null;
-        String jovahagytaEmail = null;
+        String approvedByName = null;
+        String approvedByEmail = null;
 
-        if (jovahagyta != null) {
-            jovahagytaNev = teljesNev(jovahagyta);
-            jovahagytaEmail = jovahagyta.getEmail();
+        if (approvedBy != null) {
+            approvedByName = fullName(approvedBy);
+            approvedByEmail = approvedBy.getEmail();
         }
 
-        return new TavolletResponse(
-                tavollet.getId(),
-                munkatars.getId(),
-                teljesNev(munkatars),
-                munkatars.getEmail(),
-                munkatars.getSzerepkor(),
-                tavollet.getTipus(),
-                tavollet.getStatusz(),
-                tavollet.getKezdet(),
-                tavollet.getVege(),
-                tavollet.getMunkanapok(),
-                jovahagytaNev,
-                jovahagytaEmail
+        return new DayOffResponse(
+                dayOff.getId(),
+                employee.getId(),
+                fullName(employee),
+                employee.getEmail(),
+                employee.getRole(),
+                dayOff.getType(),
+                dayOff.getStatus(),
+                dayOff.getStartDate(),
+                dayOff.getEndDate(),
+                dayOff.getWorkdays(),
+                approvedByName,
+                approvedByEmail
         );
     }
 
-    private String teljesNev(Felhasznalo felhasznalo) {
-        return felhasznalo.getKeresztnev() + " " + felhasznalo.getVezeteknev();
+    private String fullName(User user) {
+        return user.getFirstName() + " " + user.getLastName();
     }
 
     public record DayOffRequest(
-            TavolletTipus tipus,
-            LocalDate kezdet,
-            LocalDate vege
+            DayOffType type,
+            LocalDate startDate,
+            LocalDate endDate
     ) {}
 
     public record DayOffPageResponse(
             QuotaResponse quotas,
-            List<TavolletResponse> myRequests,
-            List<TavolletResponse> teamRequests
+            List<DayOffResponse> myRequests,
+            List<DayOffResponse> teamRequests
     ) {}
 
     public record QuotaResponse(
-            int ev,
+            int year,
             int homeOfficeLimit,
-            int felhasznaltHomeOffice,
+            int usedHomeOffice,
             int homeOfficeRemaining,
-            int szabadsagKeret,
-            int felhasznaltSzabadsag,
+            int dayOffLimit,
+            int usedDayOff,
             int dayOffRemaining
     ) {}
 
-    public record TavolletResponse(
+    public record DayOffResponse(
             Long id,
-            Long munkatarsId,
-            String munkatarsNev,
-            String munkatarsEmail,
-            Szerepkor munkatarsSzerepkor,
-            TavolletTipus tipus,
-            TavolletStatusz statusz,
-            LocalDate kezdet,
-            LocalDate vege,
-            int munkanapok,
-            String jovahagytaNev,
-            String jovahagytaEmail
+            Long employeeId,
+            String employeeName,
+            String employeeEmail,
+            Role employeeRole,
+            DayOffType type,
+            DayOffStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
+            int workdays,
+            String approvedByName,
+            String approvedByEmail
     ) {}
 }

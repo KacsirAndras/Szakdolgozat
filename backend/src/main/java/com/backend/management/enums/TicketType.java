@@ -1,6 +1,6 @@
 package com.backend.management.enums;
 
-public enum JegyTipus {
+public enum TicketType {
     BUG,
     FEATURE,
     HELP

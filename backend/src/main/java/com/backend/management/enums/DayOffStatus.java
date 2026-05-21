@@ -1,6 +1,6 @@
 package com.backend.management.enums;
 
-public enum TavolletStatusz {
+public enum DayOffStatus {
     PENDING,
     APPROVED,
     REJECTED

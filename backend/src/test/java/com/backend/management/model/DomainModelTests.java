@@ -1,13 +1,13 @@
 package com.backend.management.model;
 
-import com.backend.management.enums.FeladatStatusz;
-import com.backend.management.enums.JegyStatusz;
-import com.backend.management.enums.JegyTipus;
-import com.backend.management.enums.Prioritas;
-import com.backend.management.enums.ProjektStatusz;
-import com.backend.management.enums.Szerepkor;
-import com.backend.management.enums.TavolletStatusz;
-import com.backend.management.enums.TavolletTipus;
+import com.backend.management.enums.TaskStatus;
+import com.backend.management.enums.TicketStatus;
+import com.backend.management.enums.TicketType;
+import com.backend.management.enums.Priority;
+import com.backend.management.enums.ProjectStatus;
+import com.backend.management.enums.Role;
+import com.backend.management.enums.DayOffStatus;
+import com.backend.management.enums.DayOffType;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -18,62 +18,62 @@ class DomainModelTests {
 
     @Test
     void projectStartsAsPendingWithGivenDatesAndCost() {
-        Felhasznalo customer = new Felhasznalo("Ugyfel", "Elek", "customer@example.com", "pw",
-                null, null, null, null, null, null, Szerepkor.CUSTOMER, true);
+        User customer = new User("Customer", "Elek", "customer@example.com", "pw",
+                null, null, null, null, null, null, Role.CUSTOMER, true);
 
-        Projekt project = new Projekt(customer, "Portal", "Demo", 5_000_000L,
+        Project project = new Project(customer, "Portal", "Demo", 5_000_000L,
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
 
-        assertThat(project.getStatusz()).isEqualTo(ProjektStatusz.PENDING);
-        assertThat(project.getLetrehozo()).isEqualTo(customer);
-        assertThat(project.getProjektKoltseg()).isEqualTo(5_000_000L);
-        assertThat(project.getBefejezve()).isNull();
+        assertThat(project.getStatus()).isEqualTo(ProjectStatus.PENDING);
+        assertThat(project.getCreator()).isEqualTo(customer);
+        assertThat(project.getBudget()).isEqualTo(5_000_000L);
+        assertThat(project.getCompletedAt()).isNull();
     }
 
     @Test
     void taskDefaultsToTodoAndMediumPriorityWhenPriorityIsMissing() {
-        Projekt project = new Projekt();
+        Project project = new Project();
 
-        Feladat feladat = new Feladat(project, "Teszt feladat", "Leiras", null);
+        Task task = new Task(project, "Teszt task", "Leiras", null);
 
-        assertThat(feladat.getProjekt()).isEqualTo(project);
-        assertThat(feladat.getStatusz()).isEqualTo(FeladatStatusz.TO_DO);
-        assertThat(feladat.getPrioritas()).isEqualTo(Prioritas.MEDIUM);
+        assertThat(task.getProject()).isEqualTo(project);
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.TO_DO);
+        assertThat(task.getPriority()).isEqualTo(Priority.MEDIUM);
     }
 
     @Test
     void ticketStartsClosedForCreatedSupportRequest() {
-        Felhasznalo creator = new Felhasznalo("Dev", "Dora", "dev@example.com", "pw",
-                null, null, null, null, null, null, Szerepkor.DEVELOPER, true);
+        User creator = new User("Dev", "Dora", "dev@example.com", "pw",
+                null, null, null, null, null, null, Role.DEVELOPER, true);
 
-        Ticket Ticket = new Ticket(creator, JegyTipus.HELP, "Nem mukodik");
+        Ticket ticket = new Ticket(creator, TicketType.HELP, "Nem mukodik");
 
-        assertThat(Ticket.getLetrehozta()).isEqualTo(creator);
-        assertThat(Ticket.getTipus()).isEqualTo(JegyTipus.HELP);
-        assertThat(Ticket.getStatusz()).isEqualTo(JegyStatusz.CLOSED);
+        assertThat(ticket.getCreatedBy()).isEqualTo(creator);
+        assertThat(ticket.getType()).isEqualTo(TicketType.HELP);
+        assertThat(ticket.getStatus()).isEqualTo(TicketStatus.CLOSED);
     }
 
     @Test
     void dayOffStartsPendingAndKeepsWorkingDays() {
-        Alkalmazott alkalmazott = new Alkalmazott();
-        Tavollet dayOff = new Tavollet(alkalmazott, null, TavolletTipus.DAY_OFF,
+        Employee employee = new Employee();
+        DayOff dayOff = new DayOff(employee, null, DayOffType.DAY_OFF,
                 LocalDate.of(2026, 5, 4), LocalDate.of(2026, 5, 8));
 
-        dayOff.setMunkanapok(5);
+        dayOff.setWorkdays(5);
 
-        assertThat(dayOff.getMunkatars()).isEqualTo(alkalmazott);
-        assertThat(dayOff.getStatusz()).isEqualTo(TavolletStatusz.PENDING);
-        assertThat(dayOff.getMunkanapok()).isEqualTo(5);
+        assertThat(dayOff.getEmployee()).isEqualTo(employee);
+        assertThat(dayOff.getStatus()).isEqualTo(DayOffStatus.PENDING);
+        assertThat(dayOff.getWorkdays()).isEqualTo(5);
     }
 
     @Test
     void employeeCountersCanBeIncremented() {
-        Alkalmazott alkalmazott = new Alkalmazott();
+        Employee employee = new Employee();
 
-        alkalmazott.addTeljesitettFeladatok(3);
-        alkalmazott.addLezartJegy();
+        employee.addCompletedTasks(3);
+        employee.addClosedTicket();
 
-        assertThat(alkalmazott.getTeljesitettFeladatok()).isEqualTo(3);
-        assertThat(alkalmazott.getLezartJegyek()).isEqualTo(1);
+        assertThat(employee.getCompletedTasks()).isEqualTo(3);
+        assertThat(employee.getClosedTickets()).isEqualTo(1);
     }
 }

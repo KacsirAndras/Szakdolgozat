@@ -10,56 +10,66 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailService {
 
-    private JavaMailSender levelKuldo;
-    private String feladoCim;
+    private JavaMailSender mailSender;
+    private String senderAddress;
 
-    public EmailService(ObjectProvider<JavaMailSender> levelKuldoProvider,
-                        @Value("${spring.mail.username:no-reply@management.local}") String feladoCim) {
+    public EmailService(ObjectProvider<JavaMailSender> mailSenderProvider,
+                        @Value("${spring.mail.username:no-reply@management.local}") String senderAddress) {
 
-        this.levelKuldo = levelKuldoProvider.getIfAvailable();
-        this.feladoCim = feladoCim;
+        this.mailSender = mailSenderProvider.getIfAvailable();
+        this.senderAddress = senderAddress;
     }
 
-    public boolean aktivaloKodKuldes(String cimzettCim, String kod) {
-
-        String targy = "Management fiok aktivalasa";
-        String szoveg = "Az aktivalo kodod: " + kod + "\n\nA kod 30 percig ervenyes.";
-
-        return kodKuldes(cimzettCim, kod, targy, szoveg, "aktivalo");
+    public boolean sendActivationCode(String recipientAddress, String code) {
+        return sendActivationCode(recipientAddress, code, "en");
     }
 
-    public boolean jelszoVisszaallitoKodKuldes(String cimzettCim, String kod) {
+    public boolean sendActivationCode(String recipientAddress, String code, String language) {
 
-        String targy = "Management jelszo visszaallitas";
-        String szoveg = "A jelszo-visszaallito kodod: " + kod + "\n\nA kod 15 percig ervenyes.";
+        boolean english = "en".equalsIgnoreCase(language);
 
-        return kodKuldes(cimzettCim, kod, targy, szoveg, "jelszo-visszaallito");
+        String subject = english
+                ? "Account activation"
+                : "Fiok aktivalasa";
+        String text = english
+                ? "Your activation code: " + code + "\n\nThe code is valid for 30 minutes."
+                : "Az aktivalo kodod: " + code + "\n\nA kod 30 percig ervenyes.";
+
+        return sendCode(recipientAddress, code, subject, text, "activation");
     }
 
-    private boolean kodKuldes(String cimzettCim,
-                             String kod,
-                             String targy,
-                             String szoveg,
-                             String kodNev) {
+    public boolean sendPasswordResetCode(String recipientAddress, String code) {
 
-        if (levelKuldo == null) {
-            System.out.println("Nincs SMTP beallitva, nem lett elkuldve a(z) "
-                    + kodNev + " kod: " + kod + " erre: " + cimzettCim);
+        String subject = "Management password reset";
+        String text = "Your password reset code: " + code + "\n\nThe code is valid for 15 minutes.";
+
+        return sendCode(recipientAddress, code, subject, text, "password reset");
+    }
+
+    private boolean sendCode(String recipientAddress,
+                             String code,
+                             String subject,
+                             String text,
+                             String codeName) {
+
+        if (mailSender == null || senderAddress == null || senderAddress.isBlank()) {
+            System.out.println("SMTP is not configured, the "
+                    + codeName + " code was not sent to: " + recipientAddress);
             return false;
         }
 
-        SimpleMailMessage uzenet = new SimpleMailMessage();
+        SimpleMailMessage message = new SimpleMailMessage();
 
-        uzenet.setFrom(feladoCim);
-        uzenet.setTo(cimzettCim);
-        uzenet.setSubject(targy);
-        uzenet.setText(szoveg);
+        message.setFrom(senderAddress);
+        message.setTo(recipientAddress);
+        message.setSubject(subject);
+        message.setText(text);
 
         try {
-            levelKuldo.send(uzenet);
+            mailSender.send(message);
             return true;
         } catch (MailException e) {
-            System.out.println("Hiba tortent email kuldes kozben: " + e.getMessage());
+            System.out.println("Email sending failed: " + e.getMessage());
             return false;
         }
     }

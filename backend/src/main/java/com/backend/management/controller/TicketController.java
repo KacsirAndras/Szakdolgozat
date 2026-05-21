@@ -15,199 +15,199 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.backend.management.enums.JegyStatusz;
-import com.backend.management.enums.JegyTipus;
-import com.backend.management.enums.Szerepkor;
-import com.backend.management.model.Alkalmazott;
-import com.backend.management.model.Felhasznalo;
+import com.backend.management.enums.TicketStatus;
+import com.backend.management.enums.TicketType;
+import com.backend.management.enums.Role;
+import com.backend.management.model.Employee;
+import com.backend.management.model.User;
 import com.backend.management.model.Ticket;
-import com.backend.management.repository.AlkalmazottRepository;
-import com.backend.management.repository.FelhasznaloRepository;
+import com.backend.management.repository.EmployeeRepository;
+import com.backend.management.repository.UserRepository;
 import com.backend.management.repository.TicketRepository;
 
 @RestController
-@RequestMapping("/api/jegyek")
+@RequestMapping("/api/tickets")
 @CrossOrigin(origins = {"http://127.0.0.1:4200", "http://localhost:4200"})
 public class TicketController {
 
     private final TicketRepository ticketRepository;
-    private final FelhasznaloRepository felhasznaloRepository;
-    private final AlkalmazottRepository alkalmazottRepository;
+    private final UserRepository userRepository;
+    private final EmployeeRepository employeeRepository;
 
     public TicketController(TicketRepository ticketRepository,
-                            FelhasznaloRepository felhasznaloRepository,
-                            AlkalmazottRepository alkalmazottRepository) {
+                            UserRepository userRepository,
+                            EmployeeRepository employeeRepository) {
         this.ticketRepository = ticketRepository;
-        this.felhasznaloRepository = felhasznaloRepository;
-        this.alkalmazottRepository = alkalmazottRepository;
+        this.userRepository = userRepository;
+        this.employeeRepository = employeeRepository;
     }
 
     @GetMapping
-    public ResponseEntity<?> jegyekListazasa(@RequestParam String email) {
+    public ResponseEntity<?> listTickets(@RequestParam String email) {
 
-        Felhasznalo felhasznalo = felhasznaloRepository.findByEmailIgnoreCase(email).orElse(null);
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
 
-        if (felhasznalo == null || !felhasznalo.isActive()) {
+        if (user == null || !user.isActive()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Nincs ilyen aktiv felhasznalo."));
+                    .body(Map.of("message", "Nincs ilyen aktiv user."));
         }
 
-        if (felhasznalo.getSzerepkor() == Szerepkor.ADMIN) {
+        if (user.getRole() == Role.ADMIN) {
             return ResponseEntity.ok(ticketRepository.findAllByOrderByIdDesc()
                     .stream()
-                    .map(this::valassaAlakitas)
+                    .map(this::toResponse)
                     .toList());
         }
 
-        if (felhasznalo.getSzerepkor() == Szerepkor.IT) {
-            Map<Long, Ticket> jegyek = new LinkedHashMap<>();
+        if (user.getRole() == Role.IT) {
+            Map<Long, Ticket> tickets = new LinkedHashMap<>();
 
-            for (Ticket Ticket : ticketRepository.findByStatuszNotOrderByIdDesc(JegyStatusz.CLOSED)) {
-                jegyek.put(Ticket.getId(), Ticket);
+            for (Ticket ticket : ticketRepository.findByStatusNotOrderByIdDesc(TicketStatus.CLOSED)) {
+                tickets.put(ticket.getId(), ticket);
             }
 
-            for (Ticket Ticket : ticketRepository.findByLetrehoztaEmailIgnoreCaseOrderByIdDesc(email)) {
-                jegyek.putIfAbsent(Ticket.getId(), Ticket);
+            for (Ticket ticket : ticketRepository.findByCreatedByEmailIgnoreCaseOrderByIdDesc(email)) {
+                tickets.putIfAbsent(ticket.getId(), ticket);
             }
 
-            return ResponseEntity.ok(jegyek.values()
+            return ResponseEntity.ok(tickets.values()
                     .stream()
-                    .map(this::valassaAlakitas)
+                    .map(this::toResponse)
                     .toList());
         }
 
-        return ResponseEntity.ok(ticketRepository.findByLetrehoztaEmailIgnoreCaseOrderByIdDesc(email)
+        return ResponseEntity.ok(ticketRepository.findByCreatedByEmailIgnoreCaseOrderByIdDesc(email)
                 .stream()
-                .map(this::valassaAlakitas)
+                .map(this::toResponse)
                 .toList());
     }
 
     @PostMapping
-    public ResponseEntity<?> jegyLetrehozas(@RequestParam String email,
-                                          @RequestBody CreateTicketRequest keres) {
+    public ResponseEntity<?> createTicket(@RequestParam String email,
+                                          @RequestBody CreateTicketRequest request) {
 
-        Felhasznalo felhasznalo = felhasznaloRepository.findByEmailIgnoreCase(email).orElse(null);
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
 
-        if (felhasznalo == null || !felhasznalo.isActive()) {
+        if (user == null || !user.isActive()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Nincs ilyen aktiv felhasznalo."));
+                    .body(Map.of("message", "Nincs ilyen aktiv user."));
         }
 
-        if (keres == null || keres.tipus() == null || uresE(keres.problema())) {
+        if (request == null || request.type() == null || isBlank(request.problem())) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Tipus es problema kotelezo."));
+                    .body(Map.of("message", "Type and problem are required."));
         }
 
-        Ticket Ticket = new Ticket(
-                felhasznalo,
-                keres.tipus(),
-                keres.problema()
+        Ticket ticket = new Ticket(
+                user,
+                request.type(),
+                request.problem()
         );
 
-        Ticket mentett = ticketRepository.save(Ticket);
+        Ticket saved = ticketRepository.save(ticket);
 
-        return ResponseEntity.ok(valassaAlakitas(mentett));
+        return ResponseEntity.ok(toResponse(saved));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> jegyModositas(@PathVariable Long id,
+    public ResponseEntity<?> updateTicket(@PathVariable Long id,
                                           @RequestParam String email,
-                                          @RequestBody UpdateTicketRequest keres) {
+                                          @RequestBody UpdateTicketRequest request) {
 
-        Alkalmazott kezelo = alkalmazottRepository.findByEmailIgnoreCase(email).orElse(null);
+        Employee handler = employeeRepository.findByEmailIgnoreCase(email).orElse(null);
 
-        if (kezelo == null || !kezelo.isActive()) {
+        if (handler == null || !handler.isActive()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Csak aktiv ADMIN vagy IT modosithat jegyet."));
         }
 
-        if (kezelo.getSzerepkor() != Szerepkor.ADMIN &&
-                kezelo.getSzerepkor() != Szerepkor.IT) {
+        if (handler.getRole() != Role.ADMIN &&
+                handler.getRole() != Role.IT) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Csak aktiv ADMIN vagy IT modosithat jegyet."));
         }
 
-        if (keres == null || keres.statusz() == null) {
+        if (request == null || request.status() == null) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Statusz kotelezo."));
+                    .body(Map.of("message", "Status is required."));
         }
 
-        Ticket Ticket = ticketRepository.findById(id).orElse(null);
+        Ticket ticket = ticketRepository.findById(id).orElse(null);
 
-        if (Ticket == null) {
+        if (ticket == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Nincs ilyen Ticket."));
         }
 
-        Ticket.setStatusz(keres.statusz());
-        Ticket.setItMunkatars(kezelo);
+        ticket.setStatus(request.status());
+        ticket.setItEmployee(handler);
 
-        Ticket mentett = ticketRepository.save(Ticket);
+        Ticket saved = ticketRepository.save(ticket);
 
-        if (keres.statusz() == JegyStatusz.CLOSED) {
-            kezelo.addLezartJegy();
-            alkalmazottRepository.save(kezelo);
+        if (request.status() == TicketStatus.CLOSED) {
+            handler.addClosedTicket();
+            employeeRepository.save(handler);
         }
 
-        return ResponseEntity.ok(valassaAlakitas(mentett));
+        return ResponseEntity.ok(toResponse(saved));
     }
 
-    private TicketResponse valassaAlakitas(Ticket Ticket) {
+    private TicketResponse toResponse(Ticket ticket) {
 
-        Felhasznalo letrehozta = Ticket.getLetrehozta();
-        Alkalmazott itMunkatars = Ticket.getItMunkatars();
+        User createdBy = ticket.getCreatedBy();
+        Employee itEmployee = ticket.getItEmployee();
 
         String itEmail = null;
-        String itNev = null;
-        Integer lezartJegyek = null;
+        String itName = null;
+        Integer closedTickets = null;
 
-        if (itMunkatars != null) {
-            itEmail = itMunkatars.getEmail();
-            itNev = teljesNev(itMunkatars);
-            lezartJegyek = itMunkatars.getLezartJegyek();
+        if (itEmployee != null) {
+            itEmail = itEmployee.getEmail();
+            itName = fullName(itEmployee);
+            closedTickets = itEmployee.getClosedTickets();
         }
 
         return new TicketResponse(
-                Ticket.getId(),
-                Ticket.getTipus(),
-                Ticket.getStatusz(),
-                Ticket.getProblema(),
-                letrehozta.getEmail(),
-                teljesNev(letrehozta),
-                letrehozta.getSzerepkor().name(),
+                ticket.getId(),
+                ticket.getType(),
+                ticket.getStatus(),
+                ticket.getProblem(),
+                createdBy.getEmail(),
+                fullName(createdBy),
+                createdBy.getRole().name(),
                 itEmail,
-                itNev,
-                lezartJegyek
+                itName,
+                closedTickets
         );
     }
 
-    private String teljesNev(Felhasznalo felhasznalo) {
-        return felhasznalo.getKeresztnev() + " " + felhasznalo.getVezeteknev();
+    private String fullName(User user) {
+        return user.getFirstName() + " " + user.getLastName();
     }
 
-    private boolean uresE(String ertek) {
-        return ertek == null || ertek.isBlank();
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     public record CreateTicketRequest(
-            JegyTipus tipus,
-            String problema
+            TicketType type,
+            String problem
     ) {}
 
     public record UpdateTicketRequest(
-            JegyStatusz statusz
+            TicketStatus status
     ) {}
 
     public record TicketResponse(
             Long id,
-            JegyTipus tipus,
-            JegyStatusz statusz,
-            String problema,
-            String letrehoztaEmail,
-            String letrehoztaNev,
-            String letrehoztaSzerepkor,
-            String itMunkatarsEmail,
-            String itMunkatarsNev,
-            Integer itMunkatarsLezartJegyek
+            TicketType type,
+            TicketStatus status,
+            String problem,
+            String createdByEmail,
+            String createdByName,
+            String createdByRole,
+            String itEmployeeEmail,
+            String itEmployeeName,
+            Integer itEmployeeClosedTickets
     ) {}
 }

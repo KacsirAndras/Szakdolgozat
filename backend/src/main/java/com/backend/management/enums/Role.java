@@ -1,6 +1,6 @@
 package com.backend.management.enums;
 
-public enum Szerepkor {
+public enum Role {
     ADMIN,
     PRODUCT_OWNER,
     HR,

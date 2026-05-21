@@ -1,7 +1,7 @@
 package com.backend.management.model;
 
-import com.backend.management.enums.JegyStatusz;
-import com.backend.management.enums.JegyTipus;
+import com.backend.management.enums.TicketStatus;
+import com.backend.management.enums.TicketType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -14,41 +14,41 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "jegyek")
+@Table(name = "tickets")
 public class Ticket {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "Id")
+    @Column(name = "id")
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "Letrehozta", nullable = false)
-    private Felhasznalo letrehozta;
+    @JoinColumn(name = "created_by_id", nullable = false)
+    private User createdBy;
 
     @ManyToOne
-    @JoinColumn(name = "It_munkatars_id")
-    private Alkalmazott itMunkatars;
+    @JoinColumn(name = "it_employee_id")
+    private Employee itEmployee;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "Tipus")
-    private JegyTipus tipus;
+    @Column(name = "type")
+    private TicketType type;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "Statusz")
-    private JegyStatusz statusz = JegyStatusz.CLOSED;
+    @Column(name = "status")
+    private TicketStatus status = TicketStatus.CLOSED;
 
-    @Column(name = "Problema", columnDefinition = "TEXT")
-    private String problema;
+    @Column(name = "problem", columnDefinition = "TEXT")
+    private String problem;
 
     public Ticket() {
     }
 
-    public Ticket(Felhasznalo letrehozta, JegyTipus tipus, String problema) {
-        this.letrehozta = letrehozta;
-        this.tipus = tipus;
-        this.problema = problema;
-        this.statusz = JegyStatusz.CLOSED;
+    public Ticket(User createdBy, TicketType type, String problem) {
+        this.createdBy = createdBy;
+        this.type = type;
+        this.problem = problem;
+        this.status = TicketStatus.CLOSED;
     }
 
     public Long getId() {
@@ -59,43 +59,43 @@ public class Ticket {
         this.id = id;
     }
 
-    public Felhasznalo getLetrehozta() {
-        return letrehozta;
+    public User getCreatedBy() {
+        return createdBy;
     }
 
-    public void setLetrehozta(Felhasznalo letrehozta) {
-        this.letrehozta = letrehozta;
+    public void setCreatedBy(User createdBy) {
+        this.createdBy = createdBy;
     }
 
-    public Alkalmazott getItMunkatars() {
-        return itMunkatars;
+    public Employee getItEmployee() {
+        return itEmployee;
     }
 
-    public void setItMunkatars(Alkalmazott itMunkatars) {
-        this.itMunkatars = itMunkatars;
+    public void setItEmployee(Employee itEmployee) {
+        this.itEmployee = itEmployee;
     }
 
-    public JegyTipus getTipus() {
-        return tipus;
+    public TicketType getType() {
+        return type;
     }
 
-    public void setTipus(JegyTipus tipus) {
-        this.tipus = tipus;
+    public void setType(TicketType type) {
+        this.type = type;
     }
 
-    public JegyStatusz getStatusz() {
-        return statusz;
+    public TicketStatus getStatus() {
+        return status;
     }
 
-    public void setStatusz(JegyStatusz statusz) {
-        this.statusz = statusz;
+    public void setStatus(TicketStatus status) {
+        this.status = status;
     }
 
-    public String getProblema() {
-        return problema;
+    public String getProblem() {
+        return problem;
     }
 
-    public void setProblema(String problema) {
-        this.problema = problema;
+    public void setProblem(String problem) {
+        this.problem = problem;
     }
 }

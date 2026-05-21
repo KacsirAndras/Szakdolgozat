@@ -1,13 +1,13 @@
 package com.backend.management.controller;
 
-import com.backend.management.enums.FeladatStatusz;
-import com.backend.management.enums.ProjektStatusz;
-import com.backend.management.enums.Szerepkor;
-import com.backend.management.model.Alkalmazott;
-import com.backend.management.repository.AlkalmazottRepository;
-import com.backend.management.repository.CsapatRepository;
-import com.backend.management.repository.FeladatRepository;
-import com.backend.management.repository.ProjektRepository;
+import com.backend.management.enums.TaskStatus;
+import com.backend.management.enums.ProjectStatus;
+import com.backend.management.enums.Role;
+import com.backend.management.model.Employee;
+import com.backend.management.repository.EmployeeRepository;
+import com.backend.management.repository.TeamRepository;
+import com.backend.management.repository.TaskRepository;
+import com.backend.management.repository.ProjectRepository;
 import com.backend.management.service.SalaryCalculator;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.List;
 import java.util.Map;
 
@@ -30,301 +31,360 @@ import java.util.Map;
 @RequestMapping("/api/hr")
 @CrossOrigin(origins = {"http://127.0.0.1:4200", "http://localhost:4200"})
 public class HumanResourcesController {
-    private final AlkalmazottRepository alkalmazottRepository;
-    private final FeladatRepository feladatRepository;
-    private final ProjektRepository projektRepository;
-    private final CsapatRepository csapatRepository;
+    private static final long MINIMUM_GROSS_SALARY = 322_800L;
 
-    public HumanResourcesController(AlkalmazottRepository alkalmazottRepository,
-                                    FeladatRepository feladatRepository,
-                                    ProjektRepository projektRepository,
-                                    CsapatRepository csapatRepository) {
-        this.alkalmazottRepository = alkalmazottRepository;
-        this.feladatRepository = feladatRepository;
-        this.projektRepository = projektRepository;
-        this.csapatRepository = csapatRepository;
+    private final EmployeeRepository employeeRepository;
+    private final TaskRepository taskRepository;
+    private final ProjectRepository projectRepository;
+    private final TeamRepository teamRepository;
+
+    public HumanResourcesController(EmployeeRepository employeeRepository,
+                                    TaskRepository taskRepository,
+                                    ProjectRepository projectRepository,
+                                    TeamRepository teamRepository) {
+        this.employeeRepository = employeeRepository;
+        this.taskRepository = taskRepository;
+        this.projectRepository = projectRepository;
+        this.teamRepository = teamRepository;
     }
 
     @GetMapping("/employees")
-    public ResponseEntity<?> alkalmazottakListazasa(@RequestParam String requesterEmail) {
-        if (!hasznalhatjaHumanResourcesE(requesterEmail)) {
-            return tiltott();
+    public ResponseEntity<?> listEmployees(@RequestParam String requesterEmail) {
+        if (!canUseHumanResources(requesterEmail)) {
+            return forbidden();
         }
 
-        List<EmployeeResponse> alkalmazottak = alkalmazottRepository.findAll()
+        List<EmployeeResponse> employees = employeeRepository.findAll()
                 .stream()
-                .map(this::valassaAlakitas)
+                .map(this::toResponse)
                 .toList();
 
-        return ResponseEntity.ok(alkalmazottak);
+        return ResponseEntity.ok(employees);
     }
 
     @PostMapping("/employees")
-    public ResponseEntity<?> alkalmazottLetrehozas(@RequestParam String requesterEmail,
-                                            @RequestBody EmployeeRequest keres) {
-        if (!hasznalhatjaHumanResourcesE(requesterEmail)) {
-            return tiltott();
+    public ResponseEntity<?> createEmployee(@RequestParam String requesterEmail,
+                                            @RequestParam(defaultValue = "hu") String language,
+                                            @RequestBody EmployeeRequest request) {
+        if (!canUseHumanResources(requesterEmail)) {
+            return forbidden();
         }
 
-        if (uresE(keres.email()) || uresE(keres.jelszo()) || uresE(keres.keresztnev()) ||
-                uresE(keres.vezeteknev()) || keres.szerepkor() == null) {
+        if (isBlank(request.email()) || isBlank(request.password()) || isBlank(request.firstName()) ||
+                isBlank(request.lastName()) || request.role() == null) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Keresztnev, vezeteknev, email, jelszo es szerepkor kotelezo."));
+                    .body(Map.of("message", "Keresztname, lastName, email, password es role kotelezo."));
         }
 
-        if (alkalmazottRepository.findByEmailIgnoreCase(keres.email()).isPresent()) {
+        if (employeeRepository.findByEmailIgnoreCase(request.email()).isPresent()) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Ezzel az email cimmel mar van alkalmazott."));
+                    .body(Map.of("message", "Ezzel az email cimmel mar van employee."));
         }
 
-        String ellenorzesiHiba = alkalmazottKeresEllenorzes(keres);
-        if (ellenorzesiHiba != null) {
-            return ResponseEntity.badRequest().body(Map.of("message", ellenorzesiHiba));
+        String validationError = validateEmployeeRequest(request, language);
+        if (validationError != null) {
+            return ResponseEntity.badRequest().body(Map.of("message", validationError));
         }
 
-        Alkalmazott alkalmazott = new Alkalmazott(
-                keres.keresztnev(),
-                keres.vezeteknev(),
-                keres.email(),
-                keres.jelszo(),
-                keres.szuletesiDatum(),
-                keres.telefonszam(),
-                keres.cim(),
-                keres.varos(),
-                keres.iranyitoszam(),
-                keres.hazszam(),
-                keres.szerepkor(),
-                keres.active(),
-                keres.adoazonosito(),
-                keres.szemelyiIgazolvanySzam(),
-                keres.tajSzam(),
-                keres.fizetes()
+        Employee employee = new Employee(
+                request.firstName(),
+                request.lastName(),
+                request.email(),
+                request.password(),
+                request.birthDate(),
+                request.phoneNumber(),
+                request.address(),
+                request.city(),
+                request.postalCode(),
+                request.houseNumber(),
+                request.role(),
+                request.active(),
+                request.taxId(),
+                request.identityCardNumber(),
+                request.socialSecurityNumber(),
+                request.salary()
         );
-        alkalmazott.setFelvetelDatum(LocalDate.now());
+        employee.setHireDate(LocalDate.now());
 
-        return ResponseEntity.ok(valassaAlakitas(alkalmazottRepository.save(alkalmazott)));
+        return ResponseEntity.ok(toResponse(employeeRepository.save(employee)));
     }
 
     @PutMapping("/employees/{id}")
     @Transactional
-    public ResponseEntity<?> alkalmazottModositas(@RequestParam String requesterEmail,
+    public ResponseEntity<?> updateEmployee(@RequestParam String requesterEmail,
+                                            @RequestParam(defaultValue = "hu") String language,
                                             @PathVariable Long id,
-                                            @RequestBody EmployeeRequest keres) {
-        if (!hasznalhatjaHumanResourcesE(requesterEmail)) {
-            return tiltott();
+                                            @RequestBody EmployeeRequest request) {
+        if (!canUseHumanResources(requesterEmail)) {
+            return forbidden();
         }
 
-        return alkalmazottRepository.findById(id)
-                .<ResponseEntity<?>>map(alkalmazott -> {
-                    Szerepkor regiSzerepkor = alkalmazott.getSzerepkor();
-                    if (uresE(keres.email()) || uresE(keres.keresztnev()) ||
-                            uresE(keres.vezeteknev()) || keres.szerepkor() == null) {
+        return employeeRepository.findById(id)
+                .<ResponseEntity<?>>map(employee -> {
+                    Role previousRole = employee.getRole();
+                    if (isBlank(request.email()) || isBlank(request.firstName()) ||
+                            isBlank(request.lastName()) || request.role() == null) {
                         return ResponseEntity.badRequest()
-                                .body(Map.of("message", "Keresztnev, vezeteknev, email es szerepkor kotelezo."));
+                                .body(Map.of("message", "Keresztname, lastName, email es role kotelezo."));
                     }
 
-                    var azonosEmailuAlkalmazott = alkalmazottRepository.findByEmailIgnoreCase(keres.email());
-                    if (azonosEmailuAlkalmazott.isPresent() && !azonosEmailuAlkalmazott.get().getId().equals(id)) {
+                    var employeeWithSameEmail = employeeRepository.findByEmailIgnoreCase(request.email());
+                    if (employeeWithSameEmail.isPresent() && !employeeWithSameEmail.get().getId().equals(id)) {
                         return ResponseEntity.badRequest()
-                                .body(Map.of("message", "Ezzel az email cimmel mar van alkalmazott."));
+                                .body(Map.of("message", "Ezzel az email cimmel mar van employee."));
                     }
 
-                    String ellenorzesiHiba = alkalmazottKeresEllenorzes(keres);
-                    if (ellenorzesiHiba != null) {
-                        return ResponseEntity.badRequest().body(Map.of("message", ellenorzesiHiba));
+                    String validationError = validateEmployeeRequest(request, language);
+                    if (validationError != null) {
+                        return ResponseEntity.badRequest().body(Map.of("message", validationError));
                     }
 
-                    alkalmazott.setKeresztnev(keres.keresztnev());
-                    alkalmazott.setVezeteknev(keres.vezeteknev());
-                    alkalmazott.setEmail(keres.email());
-                    if (!uresE(keres.jelszo())) {
-                        alkalmazott.setJelszo(keres.jelszo());
+                    employee.setFirstName(request.firstName());
+                    employee.setLastName(request.lastName());
+                    employee.setEmail(request.email());
+                    if (!isBlank(request.password())) {
+                        employee.setPassword(request.password());
                     }
-                    alkalmazott.setSzuletesiDatum(keres.szuletesiDatum());
-                    alkalmazott.setTelefonszam(keres.telefonszam());
-                    alkalmazott.setCim(keres.cim());
-                    alkalmazott.setVaros(keres.varos());
-                    alkalmazott.setIranyitoszam(keres.iranyitoszam());
-                    alkalmazott.setHazszam(keres.hazszam());
-                    alkalmazott.setSzerepkor(keres.szerepkor());
-                    alkalmazott.setActive(keres.active());
-                    alkalmazott.setAdoazonosito(keres.adoazonosito());
-                    alkalmazott.setSzemelyiIgazolvanySzam(keres.szemelyiIgazolvanySzam());
-                    alkalmazott.setTajSzam(keres.tajSzam());
-                    alkalmazott.setFizetes(keres.fizetes());
+                    employee.setBirthDate(request.birthDate());
+                    employee.setPhoneNumber(request.phoneNumber());
+                    employee.setAddress(request.address());
+                    employee.setCity(request.city());
+                    employee.setPostalCode(request.postalCode());
+                    employee.setHouseNumber(request.houseNumber());
+                    employee.setRole(request.role());
+                    employee.setActive(request.active());
+                    employee.setTaxId(request.taxId());
+                    employee.setIdentityCardNumber(request.identityCardNumber());
+                    employee.setSocialSecurityNumber(request.socialSecurityNumber());
+                    employee.setSalary(request.salary());
 
-                    if (!keres.active() || regiSzerepkor != keres.szerepkor()) {
-                        alkalmazottSzerepkorbolEltavolitva(alkalmazott, regiSzerepkor);
+                    if (!request.active() || previousRole != request.role()) {
+                        removeEmployeeFromRole(employee, previousRole);
                     }
 
-                    return ResponseEntity.ok(valassaAlakitas(alkalmazottRepository.save(alkalmazott)));
+                    return ResponseEntity.ok(toResponse(employeeRepository.save(employee)));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("message", "Nincs ilyen alkalmazott.")));
+                        .body(Map.of("message", "Nincs ilyen employee.")));
     }
 
     @PostMapping("/employees/{id}/deactivate")
     @Transactional
-    public ResponseEntity<?> alkalmazottInaktivalas(@RequestParam String requesterEmail, @PathVariable Long id) {
-        if (!hasznalhatjaHumanResourcesE(requesterEmail)) {
-            return tiltott();
+    public ResponseEntity<?> deactivateEmployee(@RequestParam String requesterEmail, @PathVariable Long id) {
+        if (!canUseHumanResources(requesterEmail)) {
+            return forbidden();
         }
 
-        return alkalmazottRepository.findById(id)
-                .<ResponseEntity<?>>map(alkalmazott -> {
-                    alkalmazott.setActive(false);
-                    alkalmazottSzerepkorbolEltavolitva(alkalmazott, alkalmazott.getSzerepkor());
-                    return ResponseEntity.ok(valassaAlakitas(alkalmazottRepository.save(alkalmazott)));
+        return employeeRepository.findById(id)
+                .<ResponseEntity<?>>map(employee -> {
+                    employee.setActive(false);
+                    removeEmployeeFromRole(employee, employee.getRole());
+                    return ResponseEntity.ok(toResponse(employeeRepository.save(employee)));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("message", "Nincs ilyen alkalmazott.")));
+                        .body(Map.of("message", "Nincs ilyen employee.")));
     }
 
-    private boolean hasznalhatjaHumanResourcesE(String email) {
-        if (uresE(email)) {
+    private boolean canUseHumanResources(String email) {
+        if (isBlank(email)) {
             return false;
         }
 
-        return alkalmazottRepository.findByEmailIgnoreCase(email)
-                .filter(Alkalmazott::isActive)
-                .filter(alkalmazott -> alkalmazott.getSzerepkor() == Szerepkor.ADMIN ||
-                        alkalmazott.getSzerepkor() == Szerepkor.HR)
+        return employeeRepository.findByEmailIgnoreCase(email)
+                .filter(Employee::isActive)
+                .filter(employee -> employee.getRole() == Role.ADMIN ||
+                        employee.getRole() == Role.HR)
                 .isPresent();
     }
 
-    private ResponseEntity<?> tiltott() {
+    private ResponseEntity<?> forbidden() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("message", "Csak aktiv ADMIN es HR hasznalhatja a Human resources menut."));
     }
 
-    private EmployeeResponse valassaAlakitas(Alkalmazott alkalmazott) {
-        Long csapatId = alkalmazott.getCsapat() == null ? null : alkalmazott.getCsapat().getId();
-        String csapatNev = alkalmazott.getCsapat() == null ? null : alkalmazott.getCsapat().getNev();
+    private EmployeeResponse toResponse(Employee employee) {
+        Long teamId = employee.getTeam() == null ? null : employee.getTeam().getId();
+        String teamName = employee.getTeam() == null ? null : employee.getTeam().getName();
 
         return new EmployeeResponse(
-                alkalmazott.getId(),
-                alkalmazott.getKeresztnev(),
-                alkalmazott.getVezeteknev(),
-                alkalmazott.getEmail(),
-                alkalmazott.getSzuletesiDatum(),
-                alkalmazott.getTelefonszam(),
-                alkalmazott.getCim(),
-                alkalmazott.getVaros(),
-                alkalmazott.getIranyitoszam(),
-                alkalmazott.getHazszam(),
-                alkalmazott.getSzerepkor(),
-                alkalmazott.isActive(),
-                alkalmazott.getAdoazonosito(),
-                alkalmazott.getSzemelyiIgazolvanySzam(),
-                alkalmazott.getTajSzam(),
-                alkalmazott.getFizetes(),
-                korrigaltBruttoFizetes(alkalmazott),
-                nettoFizetes(alkalmazott),
-                alkalmazott.getFelvetelDatum(),
-                csapatId,
-                csapatNev,
-                alkalmazott.getTeljesitettFeladatok(),
-                alkalmazott.getLezartJegyek()
+                employee.getId(),
+                employee.getFirstName(),
+                employee.getLastName(),
+                employee.getEmail(),
+                employee.getBirthDate(),
+                employee.getPhoneNumber(),
+                employee.getAddress(),
+                employee.getCity(),
+                employee.getPostalCode(),
+                employee.getHouseNumber(),
+                employee.getRole(),
+                employee.isActive(),
+                employee.getTaxId(),
+                employee.getIdentityCardNumber(),
+                employee.getSocialSecurityNumber(),
+                employee.getSalary(),
+                adjustedGrossSalary(employee),
+                netSalary(employee),
+                employee.getHireDate(),
+                teamId,
+                teamName,
+                employee.getCompletedTasks(),
+                employee.getClosedTickets()
         );
     }
 
-    private void alkalmazottSzerepkorbolEltavolitva(Alkalmazott alkalmazott, Szerepkor eltavolitottSzerepkor) {
-        if (eltavolitottSzerepkor == Szerepkor.DEVELOPER) {
-            feladatRepository.findByMunkatarsIdAndStatuszNot(alkalmazott.getId(), FeladatStatusz.DONE)
-                    .forEach(feladat -> {
-                        feladat.setMunkatars(null);
-                        feladat.setStatusz(FeladatStatusz.TO_DO);
-                        feladatRepository.save(feladat);
+    private void removeEmployeeFromRole(Employee employee, Role removedRole) {
+        if (removedRole == Role.DEVELOPER) {
+            taskRepository.findByEmployeeIdAndStatusNot(employee.getId(), TaskStatus.DONE)
+                    .forEach(task -> {
+                        task.setEmployee(null);
+                        task.setStatus(TaskStatus.TO_DO);
+                        taskRepository.save(task);
                     });
-            alkalmazott.setCsapat(null);
+            employee.setTeam(null);
         }
 
-        if (eltavolitottSzerepkor == Szerepkor.PRODUCT_OWNER) {
-            projektRepository.findByTermekTulajdonosIdAndStatusz(alkalmazott.getId(), ProjektStatusz.ACCEPTED)
-                    .forEach(projekt -> {
-                        feladatRepository.deleteByProjektId(projekt.getId());
-                        projekt.setTermekTulajdonos(null);
-                        projekt.setCsapat(null);
-                        projekt.setStatusz(ProjektStatusz.PENDING);
-                        projektRepository.save(projekt);
+        if (removedRole == Role.PRODUCT_OWNER) {
+            projectRepository.findByProductOwnerIdAndStatus(employee.getId(), ProjectStatus.ACCEPTED)
+                    .forEach(project -> {
+                        taskRepository.deleteByProjectId(project.getId());
+                        project.setProductOwner(null);
+                        project.setTeam(null);
+                        project.setStatus(ProjectStatus.PENDING);
+                        projectRepository.save(project);
                     });
 
-            csapatRepository.findByTulajdonosId(alkalmazott.getId()).ifPresent(csapat -> {
-                csapat.getTagok().forEach(tag -> {
-                    tag.setCsapat(null);
-                    alkalmazottRepository.save(tag);
+            teamRepository.findByOwnerId(employee.getId()).ifPresent(team -> {
+                team.getMembers().forEach(member -> {
+                    member.setTeam(null);
+                    employeeRepository.save(member);
                 });
-                csapatRepository.delete(csapat);
+                teamRepository.delete(team);
             });
         }
     }
 
-    private String alkalmazottKeresEllenorzes(EmployeeRequest keres) {
-        if (keres.szerepkor() == Szerepkor.ADMIN) {
-            return "Human resources feluleten nem adhato ADMIN szerepkor.";
+    private String validateEmployeeRequest(EmployeeRequest request, String language) {
+        if (isBlank(request.firstName()) ||
+                isBlank(request.lastName()) ||
+                isBlank(request.email()) ||
+                request.birthDate() == null ||
+                isBlank(request.phoneNumber()) ||
+                isBlank(request.address()) ||
+                isBlank(request.city()) ||
+                isBlank(request.postalCode()) ||
+                isBlank(request.houseNumber()) ||
+                request.role() == null ||
+                request.salary() == null) {
+            return "Minden kotelezo alkalmazotti mezot ki kell tolteni.";
         }
 
-        if (keres.fizetes() != null && keres.fizetes() < 0) {
-            return "A brutto fizetes nem lehet negativ.";
+        if (request.role() == Role.ADMIN) {
+            return "Human resources feluleten nem adhato ADMIN role.";
+        }
+
+        if (!isValidEmail(request.email())) {
+            return "Adj meg egy ervenyes email cimet.";
+        }
+
+        if (!isValidPhoneNumber(request.phoneNumber())) {
+            return "A telefonszam 8-15 szamjegy legyen, opcionalis + elotaggal.";
+        }
+
+        if (!isValidPostalCode(request.postalCode())) {
+            return "Az iranyitoszam pontosan 4 szamjegy legyen.";
+        }
+
+        if (!request.houseNumber().trim().matches("^\\d+$")) {
+            return "A hazszam csak szam lehet.";
+        }
+
+        int age = Period.between(request.birthDate(), LocalDate.now()).getYears();
+        if (age < 18) {
+            return isEnglish(language)
+                    ? "Employees under 18 cannot be added."
+                    : "18 ev alatti alkalmazott nem veheto fel.";
+        }
+
+        if (request.salary() < MINIMUM_GROSS_SALARY) {
+            return isEnglish(language)
+                    ? "The salary cannot be lower than the minimum wage."
+                    : "A fizetes nem lehet kisebb a minimalbernel.";
         }
 
         return null;
     }
 
-    private long korrigaltBruttoFizetes(Alkalmazott alkalmazott) {
-        return SalaryCalculator.korrigaltBruttoFizetes(alkalmazott.getFizetes(), alkalmazott.getFelvetelDatum(), LocalDate.now());
+    private boolean isEnglish(String language) {
+        return "en".equalsIgnoreCase(language);
     }
 
-    private long nettoFizetes(Alkalmazott alkalmazott) {
-        return SalaryCalculator.nettoFizetes(alkalmazott.getFizetes(), alkalmazott.getFelvetelDatum(), LocalDate.now());
+    private boolean isValidEmail(String value) {
+        return value != null && value.trim().matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     }
 
-    private boolean uresE(String ertek) {
-        return ertek == null || ertek.isBlank();
+    private boolean isValidPhoneNumber(String value) {
+        return value != null && value.trim().matches("^\\+?\\d{8,15}$");
+    }
+
+    private boolean isValidPostalCode(String value) {
+        return value != null && value.trim().matches("^\\d{4}$");
+    }
+
+    private long adjustedGrossSalary(Employee employee) {
+        return SalaryCalculator.adjustedGrossSalary(employee.getSalary(), employee.getHireDate(), LocalDate.now());
+    }
+
+    private long netSalary(Employee employee) {
+        return SalaryCalculator.netSalary(employee.getSalary(), employee.getHireDate(), LocalDate.now());
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     public record EmployeeRequest(
-            String keresztnev,
-            String vezeteknev,
+            String firstName,
+            String lastName,
             String email,
-            String jelszo,
-            LocalDate szuletesiDatum,
-            String telefonszam,
-            String cim,
-            String varos,
-            String iranyitoszam,
-            String hazszam,
-            Szerepkor szerepkor,
+            String password,
+            LocalDate birthDate,
+            String phoneNumber,
+            String address,
+            String city,
+            String postalCode,
+            String houseNumber,
+            Role role,
             boolean active,
-            String adoazonosito,
-            String szemelyiIgazolvanySzam,
-            String tajSzam,
-            Long fizetes
+            String taxId,
+            String identityCardNumber,
+            String socialSecurityNumber,
+            Long salary
     ) {}
 
     public record EmployeeResponse(
             Long id,
-            String keresztnev,
-            String vezeteknev,
+            String firstName,
+            String lastName,
             String email,
-            LocalDate szuletesiDatum,
-            String telefonszam,
-            String cim,
-            String varos,
-            String iranyitoszam,
-            String hazszam,
-            Szerepkor szerepkor,
+            LocalDate birthDate,
+            String phoneNumber,
+            String address,
+            String city,
+            String postalCode,
+            String houseNumber,
+            Role role,
             boolean active,
-            String adoazonosito,
-            String szemelyiIgazolvanySzam,
-            String tajSzam,
-            Long fizetes,
-            long korrigaltBruttoFizetes,
-            long nettoFizetes,
-            LocalDate felvetelDatum,
-            Long csapatId,
-            String csapatNev,
-            int teljesitettFeladatok,
-            int lezartJegyek
+            String taxId,
+            String identityCardNumber,
+            String socialSecurityNumber,
+            Long salary,
+            long adjustedGrossSalary,
+            long netSalary,
+            LocalDate hireDate,
+            Long teamId,
+            String teamName,
+            int completedTasks,
+            int closedTickets
     ) {}
 }

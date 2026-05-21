@@ -1,191 +1,252 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS jegyek;
-DROP TABLE IF EXISTS Tavollet;
-DROP TABLE IF EXISTS Feladat;
-DROP TABLE IF EXISTS projekt;
-DROP TABLE IF EXISTS Alkalmazott;
-DROP TABLE IF EXISTS Ugyfel;
-DROP TABLE IF EXISTS Csapat;
-DROP TABLE IF EXISTS Felhasznalo;
+DROP TABLE IF EXISTS tickets;
+DROP TABLE IF EXISTS day_offs;
+DROP TABLE IF EXISTS tasks;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS employees;
+DROP TABLE IF EXISTS customers;
+DROP TABLE IF EXISTS teams;
+DROP TABLE IF EXISTS users;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
-CREATE TABLE Felhasznalo (
-    Id BIGINT NOT NULL AUTO_INCREMENT,
-    Keresztnev VARCHAR(255),
-    Vezeteknev VARCHAR(255),
-    Email VARCHAR(255) NOT NULL,
-    Jelszo VARCHAR(255) NOT NULL,
-    Szuletesi_datum DATE,
-    Telefonszam VARCHAR(255),
-    Cim VARCHAR(255),
-    Varos VARCHAR(255),
-    Iranyitoszam VARCHAR(255),
-    Hazszam VARCHAR(255),
-    Szerepkor VARCHAR(50),
-    Aktiv BIT NOT NULL DEFAULT 0,
-    Visszaallito_kod VARCHAR(255),
-    Visszaallito_kod_lejar DATETIME(6),
-    Aktivalo_kod VARCHAR(255),
-    Aktivalo_kod_lejar DATETIME(6),
-    PRIMARY KEY (Id),
-    UNIQUE KEY uk_felhasznalo_email (Email)
+CREATE TABLE users (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    email VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    birth_date DATE,
+    phone_number VARCHAR(255),
+    address VARCHAR(255),
+    city VARCHAR(255),
+    postal_code VARCHAR(255),
+    house_number VARCHAR(255),
+    role VARCHAR(50),
+    active BIT NOT NULL DEFAULT 0,
+    reset_code VARCHAR(255),
+    reset_code_expires_at DATETIME(6),
+    activation_code VARCHAR(255),
+    activation_code_expires_at DATETIME(6),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE Alkalmazott (
-    Id BIGINT NOT NULL,
-    Adoazonosito VARCHAR(255),
-    Szemelyi_igazolvany_szam VARCHAR(255),
-    Taj_szam VARCHAR(255),
-    Fizetes BIGINT,
-    Felvetel_datum DATE,
-    Csapat_id BIGINT,
-    Teljesitett_feladatok INT NOT NULL DEFAULT 0,
-    Lezart_jegyek INT NOT NULL DEFAULT 0,
-    PRIMARY KEY (Id),
-    CONSTRAINT fk_alkalmazott_felhasznalo
-        FOREIGN KEY (Id) REFERENCES Felhasznalo (Id)
+CREATE TABLE employees (
+    id BIGINT NOT NULL,
+    tax_id VARCHAR(255),
+    identity_card_number VARCHAR(255),
+    social_security_number VARCHAR(255),
+    salary BIGINT,
+    hire_date DATE,
+    team_id BIGINT,
+    completed_tasks INT NOT NULL DEFAULT 0,
+    closed_tickets INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    CONSTRAINT fk_employees_user
+        FOREIGN KEY (id) REFERENCES users (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE Ugyfel (
-    Id BIGINT NOT NULL,
-    Ceg_nev VARCHAR(255) NOT NULL,
-    PRIMARY KEY (Id),
-    CONSTRAINT fk_ugyfel_felhasznalo
-        FOREIGN KEY (Id) REFERENCES Felhasznalo (Id)
+CREATE TABLE customers (
+    id BIGINT NOT NULL,
+    company_name VARCHAR(255),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_customers_user
+        FOREIGN KEY (id) REFERENCES users (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE Csapat (
-    Id BIGINT NOT NULL AUTO_INCREMENT,
-    Nev VARCHAR(255),
-    Tulajdonos_id BIGINT NOT NULL,
-    PRIMARY KEY (Id),
-    UNIQUE KEY uk_csapat_tulajdonos (Tulajdonos_id),
-    CONSTRAINT fk_csapat_tulajdonos
-        FOREIGN KEY (Tulajdonos_id) REFERENCES Alkalmazott (Id)
+CREATE TABLE teams (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    name VARCHAR(255),
+    owner_id BIGINT NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_teams_owner (owner_id),
+    CONSTRAINT fk_teams_owner
+        FOREIGN KEY (owner_id) REFERENCES employees (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-ALTER TABLE Alkalmazott
-    ADD CONSTRAINT fk_alkalmazott_csapat
-        FOREIGN KEY (Csapat_id) REFERENCES Csapat (Id);
+ALTER TABLE employees
+    ADD CONSTRAINT fk_employees_team
+        FOREIGN KEY (team_id) REFERENCES teams (id);
 
-CREATE TABLE projekt (
-    Id BIGINT NOT NULL AUTO_INCREMENT,
-    Letrehozo_id BIGINT NOT NULL,
-    Termek_tulajdonos_id BIGINT,
-    Csapat_id BIGINT,
-    Cim VARCHAR(255),
-    Leiras VARCHAR(255),
-    Statusz VARCHAR(50),
-    Projekt_koltseg BIGINT NOT NULL DEFAULT 0,
-    Kezdete DATE,
-    Hatarido DATE,
-    Befejezve DATE,
-    PRIMARY KEY (Id),
-    KEY idx_projekt_statusz (Statusz),
-    KEY idx_projekt_befejezve (Befejezve),
-    CONSTRAINT fk_projekt_letrehozo
-        FOREIGN KEY (Letrehozo_id) REFERENCES Felhasznalo (Id),
-    CONSTRAINT fk_projekt_termek_tulajdonos
-        FOREIGN KEY (Termek_tulajdonos_id) REFERENCES Alkalmazott (Id),
-    CONSTRAINT fk_projekt_csapat
-        FOREIGN KEY (Csapat_id) REFERENCES Csapat (Id)
+CREATE TABLE projects (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    creator_id BIGINT NOT NULL,
+    product_owner_id BIGINT,
+    team_id BIGINT,
+    title VARCHAR(255),
+    description VARCHAR(255),
+    status VARCHAR(50),
+    budget BIGINT NOT NULL DEFAULT 0,
+    start_date DATE,
+    deadline DATE,
+    completed_at DATE,
+    PRIMARY KEY (id),
+    KEY idx_projects_status (status),
+    KEY idx_projects_completed_at (completed_at),
+    CONSTRAINT fk_projects_creator
+        FOREIGN KEY (creator_id) REFERENCES users (id),
+    CONSTRAINT fk_projects_product_owner
+        FOREIGN KEY (product_owner_id) REFERENCES employees (id),
+    CONSTRAINT fk_projects_team
+        FOREIGN KEY (team_id) REFERENCES teams (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE Feladat (
-    Id BIGINT NOT NULL AUTO_INCREMENT,
-    Projekt_id BIGINT NOT NULL,
-    Munkatars_id BIGINT,
-    Cim VARCHAR(255),
-    Leiras VARCHAR(255),
-    Statusz VARCHAR(50),
-    Prioritas VARCHAR(50),
-    PRIMARY KEY (Id),
-    KEY idx_feladat_statusz (Statusz),
-    CONSTRAINT fk_feladat_projekt
-        FOREIGN KEY (Projekt_id) REFERENCES projekt (Id),
-    CONSTRAINT fk_feladat_munkatars
-        FOREIGN KEY (Munkatars_id) REFERENCES Alkalmazott (Id)
+CREATE TABLE tasks (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    project_id BIGINT NOT NULL,
+    employee_id BIGINT,
+    title VARCHAR(255),
+    description VARCHAR(255),
+    status VARCHAR(50),
+    priority VARCHAR(50),
+    PRIMARY KEY (id),
+    KEY idx_tasks_status (status),
+    CONSTRAINT fk_tasks_project
+        FOREIGN KEY (project_id) REFERENCES projects (id),
+    CONSTRAINT fk_tasks_employee
+        FOREIGN KEY (employee_id) REFERENCES employees (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE Tavollet (
-    Id BIGINT NOT NULL AUTO_INCREMENT,
-    Munkatars_id BIGINT,
-    Jovahagyta BIGINT,
-    Tipus VARCHAR(50),
-    Statusz VARCHAR(50),
-    Kezdet DATE,
-    Vege DATE,
-    Munkanapok INT NOT NULL DEFAULT 0,
-    PRIMARY KEY (Id),
-    KEY idx_tavollet_statusz (Statusz),
-    KEY idx_tavollet_kezdet (Kezdet),
-    CONSTRAINT fk_tavollet_munkatars
-        FOREIGN KEY (Munkatars_id) REFERENCES Alkalmazott (Id),
-    CONSTRAINT fk_tavollet_jovahagyta
-        FOREIGN KEY (Jovahagyta) REFERENCES Alkalmazott (Id)
+CREATE TABLE day_offs (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    employee_id BIGINT,
+    approved_by_id BIGINT,
+    type VARCHAR(50),
+    status VARCHAR(50),
+    start_date DATE,
+    end_date DATE,
+    workdays INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    KEY idx_day_offs_status (status),
+    KEY idx_day_offs_start_date (start_date),
+    CONSTRAINT fk_day_offs_employee
+        FOREIGN KEY (employee_id) REFERENCES employees (id),
+    CONSTRAINT fk_day_offs_approved_by
+        FOREIGN KEY (approved_by_id) REFERENCES employees (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE jegyek (
-    Id BIGINT NOT NULL AUTO_INCREMENT,
-    Letrehozta BIGINT NOT NULL,
-    It_munkatars_id BIGINT,
-    Tipus VARCHAR(50),
-    Statusz VARCHAR(50),
-    Problema TEXT,
-    PRIMARY KEY (Id),
-    KEY idx_jegyek_statusz (Statusz),
-    CONSTRAINT fk_jegyek_letrehozta
-        FOREIGN KEY (Letrehozta) REFERENCES Felhasznalo (Id),
-    CONSTRAINT fk_jegyek_it_munkatars
-        FOREIGN KEY (It_munkatars_id) REFERENCES Alkalmazott (Id)
+CREATE TABLE tickets (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    created_by_id BIGINT NOT NULL,
+    it_employee_id BIGINT,
+    type VARCHAR(50),
+    status VARCHAR(50),
+    problem TEXT,
+    PRIMARY KEY (id),
+    KEY idx_tickets_status (status),
+    CONSTRAINT fk_tickets_created_by
+        FOREIGN KEY (created_by_id) REFERENCES users (id),
+    CONSTRAINT fk_tickets_it_employee
+        FOREIGN KEY (it_employee_id) REFERENCES employees (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO Felhasznalo (Id, Keresztnev, Vezeteknev, Email, Jelszo, Szuletesi_datum, Szerepkor, Aktiv)
+INSERT INTO users (id, first_name, last_name, email, password, birth_date, phone_number, address, city, postal_code, house_number, role, active)
 VALUES
-    (1, 'Admin', 'Elek', 'admin@example.com', 'admin', '1990-01-01', 'ADMIN', 1),
-    (2, 'Hr', 'Anna', 'hr@example.com', 'hr', '1992-02-02', 'HR', 1),
-    (3, 'It', 'Bela', 'it@example.com', 'it', '1991-03-03', 'IT', 1),
-    (4, 'Owner', 'Peter', 'po@example.com', 'po', '1988-04-04', 'PRODUCT_OWNER', 1),
-    (5, 'Dev', 'Dora', 'dev@example.com', 'dev', '1995-05-05', 'DEVELOPER', 1),
-    (6, 'Ugyfel', 'Kft', 'customer@example.com', 'customer', '1985-06-06', 'CUSTOMER', 1);
+    (1, 'Admin', 'User', 'admin@example.com', 'admin', '1990-01-01', '36201111111', 'Main Street', 'Budapest', '1111', '1', 'ADMIN', 1),
+    (2, 'Hr', 'Anna', 'hr@example.com', 'hr', '1992-02-02', '36202222222', 'People Street', 'Budapest', '1112', '2', 'HR', 1),
+    (3, 'It', 'Bela', 'it@example.com', 'it', '1991-03-03', '36203333333', 'Support Street', 'Budapest', '1113', '3', 'IT', 1),
+    (4, 'Owner', 'Peter', 'po@example.com', 'po', '1988-04-04', '36204444444', 'Product Street', 'Budapest', '1114', '4', 'PRODUCT_OWNER', 1),
+    (5, 'Dev', 'Dora', 'dev@example.com', 'dev', '1995-05-05', '36205555555', 'Code Street', 'Budapest', '1115', '5', 'DEVELOPER', 1),
+    (6, 'Dev', 'Mark', 'dev2@example.com', 'dev2', '1994-06-06', '36206666666', 'Api Road', 'Budapest', '1116', '6', 'DEVELOPER', 1),
+    (7, 'Dev', 'Lili', 'dev3@example.com', 'dev3', '1996-07-07', '36207777777', 'Testing Square', 'Budapest', '1117', '7', 'DEVELOPER', 1),
+    (8, 'Hr', 'Kata', 'hr2@example.com', 'hr2', '1993-08-08', '36208888888', 'Work Street', 'Szeged', '6720', '8', 'HR', 1),
+    (9, 'It', 'Gabor', 'it2@example.com', 'it2', '1990-09-09', '36209999999', 'Network Lane', 'Szeged', '6721', '9', 'IT', 1),
+    (10, 'Owner', 'Nora', 'po2@example.com', 'po2', '1987-10-10', '36301111111', 'Sprint Street', 'Szeged', '6722', '10', 'PRODUCT_OWNER', 1),
+    (11, 'Dev', 'Zalan', 'dev4@example.com', 'dev4', '1997-11-11', '36302222222', 'Backend Road', 'Szeged', '6723', '11', 'DEVELOPER', 1),
+    (12, 'Dev', 'Reka', 'dev5@example.com', 'dev5', '1998-12-12', '36303333333', 'Frontend Road', 'Szeged', '6724', '12', 'DEVELOPER', 1),
+    (13, 'Dev', 'Milan', 'dev6@example.com', 'dev6', '1995-01-13', '36304444444', 'Mobile Promenade', 'Debrecen', '4024', '13', 'DEVELOPER', 1),
+    (14, 'Owner', 'Balazs', 'po3@example.com', 'po3', '1986-02-14', '36305555555', 'Roadmap Row', 'Debrecen', '4025', '14', 'PRODUCT_OWNER', 1),
+    (15, 'Dev', 'Eszter', 'dev7@example.com', 'dev7', '1999-03-15', '36306666666', 'Release Square', 'Debrecen', '4026', '15', 'DEVELOPER', 1),
+    (16, 'Customer', 'Company', 'customer@example.com', 'customer', '1985-06-06', '36307777777', 'Client Street', 'Gyor', '9021', '16', 'CUSTOMER', 1),
+    (17, 'Partner', 'Company', 'customer2@example.com', 'customer2', '1984-07-17', '36308888888', 'Market Square', 'Pecs', '7621', '17', 'CUSTOMER', 1),
+    (18, 'Demo', 'Company', 'customer3@example.com', 'customer3', '1983-08-18', '36309999999', 'Customer Row', 'Miskolc', '3525', '18', 'CUSTOMER', 1);
 
-INSERT INTO Alkalmazott (Id, Adoazonosito, Szemelyi_igazolvany_szam, Taj_szam, Fizetes, Felvetel_datum, Teljesitett_feladatok, Lezart_jegyek)
+INSERT INTO employees (id, tax_id, identity_card_number, social_security_number, salary, hire_date, completed_tasks, closed_tickets)
 VALUES
     (1, '1111111111', 'A-111111', '111111111', 900000, '2019-01-01', 0, 0),
     (2, '2222222222', 'B-222222', '222222222', 650000, '2023-01-01', 0, 0),
     (3, '3333333333', 'C-333333', '333333333', 700000, '2022-01-01', 0, 5),
     (4, '4444444444', 'D-444444', '444444444', 850000, '2020-01-01', 0, 0),
-    (5, '5555555555', 'E-555555', '555555555', 600000, '2024-01-01', 2, 0);
+    (5, '5555555555', 'E-555555', '555555555', 600000, '2024-01-01', 2, 0),
+    (6, '6666666666', 'F-666666', '666666666', 620000, '2024-02-01', 4, 0),
+    (7, '7777777777', 'G-777777', '777777777', 610000, '2024-03-01', 3, 0),
+    (8, '8888888888', 'H-888888', '888888888', 660000, '2023-02-01', 0, 0),
+    (9, '9999999999', 'I-999999', '999999999', 720000, '2022-02-01', 0, 7),
+    (10, '1010101010', 'J-101010', '101010101', 870000, '2020-02-01', 0, 0),
+    (11, '1212121212', 'K-121212', '121212121', 630000, '2024-04-01', 5, 0),
+    (12, '1313131313', 'L-131313', '131313131', 640000, '2024-05-01', 6, 0),
+    (13, '1414141414', 'M-141414', '141414141', 650000, '2024-06-01', 1, 0),
+    (14, '1515151515', 'N-151515', '151515151', 890000, '2020-03-01', 0, 0),
+    (15, '1616161616', 'O-161616', '161616161', 660000, '2024-07-01', 2, 0);
 
-INSERT INTO Ugyfel (Id, Ceg_nev)
-VALUES (6, 'Demo Ugyfel Kft.');
-
-INSERT INTO Csapat (Id, Nev, Tulajdonos_id)
-VALUES (1, 'Alpha csapat', 4);
-
-UPDATE Alkalmazott
-SET Csapat_id = 1
-WHERE Id IN (5);
-
-INSERT INTO projekt (Id, Letrehozo_id, Termek_tulajdonos_id, Csapat_id, Cim, Leiras, Statusz, Projekt_koltseg, Kezdete, Hatarido, Befejezve)
+INSERT INTO customers (id, company_name)
 VALUES
-    (1, 6, 4, NULL, 'Lezart webfejlesztes', 'Demo completed projekt', 'COMPLETED', 12000000, '2024-01-10', '2024-08-01', '2024-08-15'),
-    (2, 6, 4, 1, 'Aktiv rendszerfejlesztes', 'Demo accepted projekt', 'ACCEPTED', 8000000, '2025-02-01', '2025-11-30', NULL),
-    (3, 6, NULL, NULL, 'Pending igeny', 'Demo pending projekt', 'PENDING', 5000000, '2025-03-01', '2025-12-31', NULL);
+    (16, 'Demo Customer Kft.'),
+    (17, 'Partner Rendszer Zrt.'),
+    (18, 'Test Solutions Ltd.');
 
-INSERT INTO Feladat (Projekt_id, Munkatars_id, Cim, Leiras, Statusz, Prioritas)
+INSERT INTO teams (id, name, owner_id)
 VALUES
-    (2, NULL, 'Adatbazis ellenorzes', 'Tabla- es kapcsolatellenorzes', 'TO_DO', 'MEDIUM'),
-    (2, 5, 'Frontend statisztika', 'Diagramok megjelenitese', 'IN_PROGRESS', 'HIGH');
+    (1, 'Alpha team', 4),
+    (2, 'Beta team', 10),
+    (3, 'Gamma team', 14);
 
-INSERT INTO Tavollet (Munkatars_id, Jovahagyta, Tipus, Statusz, Kezdet, Vege, Munkanapok)
+UPDATE employees
+SET team_id = 1
+WHERE id IN (5, 6, 7);
+
+UPDATE employees
+SET team_id = 2
+WHERE id IN (11, 12);
+
+UPDATE employees
+SET team_id = 3
+WHERE id IN (13, 15);
+
+INSERT INTO projects (id, creator_id, product_owner_id, team_id, title, description, status, budget, start_date, deadline, completed_at)
+VALUES
+    (1, 16, 4, NULL, 'Completed web development', 'Demo completed project', 'COMPLETED', 12000000, '2024-01-10', '2024-08-01', '2024-08-15'),
+    (2, 16, 4, 1, 'Active system development', 'Demo accepted project', 'ACCEPTED', 8000000, '2025-02-01', '2025-11-30', NULL),
+    (3, 16, NULL, NULL, 'Pending request', 'Demo pending project', 'PENDING', 5000000, '2025-03-01', '2025-12-31', NULL),
+    (4, 17, 10, 2, 'Mobile application', 'Customer portal mobile interface', 'ACCEPTED', 9500000, '2025-01-15', '2025-09-30', NULL),
+    (5, 17, 10, 2, 'Reporting module', 'Executive reporting feature development', 'COMPLETED', 6200000, '2024-03-01', '2024-10-15', '2024-10-10'),
+    (6, 17, NULL, NULL, 'Integration request', 'External system connection', 'PENDING', 7200000, '2025-04-01', '2025-12-01', NULL),
+    (7, 18, 14, 3, 'Customer portal update', 'Portal UX and API extension', 'ACCEPTED', 11000000, '2025-05-01', '2026-01-31', NULL),
+    (8, 18, 14, 3, 'Data migration', 'Legacy data migration', 'COMPLETED', 4300000, '2024-05-20', '2024-09-20', '2024-09-18'),
+    (9, 18, NULL, NULL, 'Rejected prototype', 'Rejected development idea', 'REJECTED', 3000000, '2025-06-01', '2025-10-01', NULL),
+    (10, 16, 4, 1, 'Active webshop development', 'Accepted test project with developer tasks', 'ACCEPTED', 8500000, '2026-01-15', '2026-09-30', NULL),
+    (11, 16, NULL, NULL, 'New CRM request', 'Customer project waiting for acceptance', 'PENDING', 6000000, '2026-02-01', '2026-10-15', NULL),
+    (12, 17, 10, 2, 'Completed reporting module', 'Completed project for statistics revenue', 'COMPLETED', 7200000, '2025-03-01', '2025-11-30', '2025-12-05'),
+    (13, 17, NULL, NULL, 'Rejected demo prototype', 'Rejected demo project', 'REJECTED', 4500000, '2026-03-01', '2026-08-31', NULL);
+
+INSERT INTO tasks (project_id, employee_id, title, description, status, priority)
+VALUES
+    (2, NULL, 'Database review', 'Table and relation review', 'TO_DO', 'MEDIUM'),
+    (2, 5, 'Frontend statistics', 'Display charts and dashboards', 'IN_PROGRESS', 'HIGH'),
+    (4, 11, 'Mobile login', 'Login screen and token handling', 'IN_PROGRESS', 'HIGH'),
+    (4, NULL, 'Push notifications', 'Prepare notification service', 'TO_DO', 'MEDIUM'),
+    (7, 13, 'Portal permissions', 'Role-based menu visibility', 'DONE', 'HIGH'),
+    (7, 15, 'API documentation', 'Document endpoints', 'TO_DO', 'LOW'),
+    (10, 5, 'Cart flow', 'Cart page and checkout flow implementation', 'IN_PROGRESS', 'HIGH'),
+    (10, 6, 'Admin product management', 'Product CRUD and permissions', 'TO_DO', 'MEDIUM'),
+    (12, 11, 'Report export', 'Finished PDF export task', 'DONE', 'LOW');
+
+INSERT INTO day_offs (employee_id, approved_by_id, type, status, start_date, end_date, workdays)
 VALUES
     (5, 4, 'DAY_OFF', 'APPROVED', '2025-07-01', '2025-07-05', 5),
-    (5, NULL, 'HOME_OFFICE', 'PENDING', '2025-09-01', '2025-09-02', 2);
+    (6, NULL, 'HOME_OFFICE', 'PENDING', '2025-09-01', '2025-09-02', 2),
+    (7, 4, 'DAY_OFF', 'REJECTED', '2025-08-11', '2025-08-13', 3),
+    (11, 10, 'HOME_OFFICE', 'APPROVED', '2025-06-16', '2025-06-18', 3),
+    (12, NULL, 'DAY_OFF', 'PENDING', '2025-10-06', '2025-10-10', 5),
+    (15, 14, 'DAY_OFF', 'APPROVED', '2025-12-22', '2025-12-24', 3);
 
-INSERT INTO jegyek (Letrehozta, It_munkatars_id, Tipus, Statusz, Problema)
+INSERT INTO tickets (created_by_id, it_employee_id, type, status, problem)
 VALUES
-    (6, 3, 'HELP', 'CLOSED', 'Demo lezart ugyfel jegy'),
-    (5, NULL, 'BUG', 'OPEN', 'Demo nyitott hiba');
+    (16, 3, 'HELP', 'CLOSED', 'Demo closed customer ticket'),
+    (5, NULL, 'BUG', 'OPEN', 'Demo open bug'),
+    (17, 9, 'FEATURE', 'IN_PROGRESS', 'Partner report export request'),
+    (12, 3, 'BUG', 'RESOLVED', 'Frontend validation bug fixed'),
+    (18, NULL, 'HELP', 'OPEN', 'Activation code did not arrive'),
+    (7, 9, 'HELP', 'CLOSED', 'Developer permissions configured');

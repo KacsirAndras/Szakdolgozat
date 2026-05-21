@@ -13,301 +13,354 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.backend.management.enums.FeladatStatusz;
-import com.backend.management.enums.Szerepkor;
-import com.backend.management.model.Alkalmazott;
-import com.backend.management.model.Csapat;
-import com.backend.management.repository.AlkalmazottRepository;
-import com.backend.management.repository.CsapatRepository;
-import com.backend.management.repository.FeladatRepository;
+import com.backend.management.enums.TaskStatus;
+import com.backend.management.enums.Role;
+import com.backend.management.model.Employee;
+import com.backend.management.model.Project;
+import com.backend.management.model.Team;
+import com.backend.management.repository.EmployeeRepository;
+import com.backend.management.repository.ProjectRepository;
+import com.backend.management.repository.TeamRepository;
+import com.backend.management.repository.TaskRepository;
 
 @RestController
 @RequestMapping("/api/teams")
 @CrossOrigin(origins = {"http://127.0.0.1:4200", "http://localhost:4200"})
 public class TeamController {
 
-    private final CsapatRepository csapatRepository;
-    private final AlkalmazottRepository alkalmazottRepository;
-    private final FeladatRepository feladatRepository;
+    private final TeamRepository teamRepository;
+    private final EmployeeRepository employeeRepository;
+    private final TaskRepository taskRepository;
+    private final ProjectRepository projectRepository;
 
-    public TeamController(CsapatRepository csapatRepository,
-                          AlkalmazottRepository alkalmazottRepository,
-                          FeladatRepository feladatRepository) {
-        this.csapatRepository = csapatRepository;
-        this.alkalmazottRepository = alkalmazottRepository;
-        this.feladatRepository = feladatRepository;
+    public TeamController(TeamRepository teamRepository,
+                          EmployeeRepository employeeRepository,
+                          TaskRepository taskRepository,
+                          ProjectRepository projectRepository) {
+        this.teamRepository = teamRepository;
+        this.employeeRepository = employeeRepository;
+        this.taskRepository = taskRepository;
+        this.projectRepository = projectRepository;
     }
 
     @GetMapping("/my")
-    public ResponseEntity<?> sajatCsapatLekerdezes(@RequestParam String ownerEmail) {
+    public ResponseEntity<?> getMyTeam(@RequestParam String ownerEmail) {
 
-        Alkalmazott tulajdonos = alkalmazottRepository.findByEmailIgnoreCase(ownerEmail).orElse(null);
+        Employee owner = employeeRepository.findByEmailIgnoreCase(ownerEmail).orElse(null);
 
-        if (tulajdonos == null || !tulajdonos.isActive() || tulajdonos.getSzerepkor() != Szerepkor.PRODUCT_OWNER) {
+        if (!canManageOwnedTeam(owner)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv PRODUCT_OWNER kerheti le a csapatot."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy PRODUCT_OWNER kerheti le a teamot."));
         }
 
-        Csapat csapat = csapatRepository.findByTulajdonosEmailIgnoreCase(tulajdonos.getEmail()).orElse(null);
+        Team team = teamRepository.findByOwnerEmailIgnoreCase(owner.getEmail()).orElse(null);
 
-        if (csapat == null) {
+        if (team == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Meg nincs csapatod."));
+                    .body(Map.of("message", "Meg nincs teamod."));
         }
 
-        return ResponseEntity.ok(csapatValassaAlakitas(csapat));
+        return ResponseEntity.ok(toTeamResponse(team));
     }
 
     @GetMapping
-    public ResponseEntity<?> csapatokLekerdezes(@RequestParam String email) {
+    public ResponseEntity<?> getTeams(@RequestParam String email) {
 
-        Alkalmazott felhasznalo = alkalmazottRepository.findByEmailIgnoreCase(email).orElse(null);
+        Employee user = employeeRepository.findByEmailIgnoreCase(email).orElse(null);
 
-        if (felhasznalo == null || !felhasznalo.isActive()) {
+        if (user == null || !user.isActive()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER lathatja az osszes csapatot."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER lathatja az osszes teamot."));
         }
 
-        if (felhasznalo.getSzerepkor() != Szerepkor.ADMIN &&
-                felhasznalo.getSzerepkor() != Szerepkor.DEVELOPER) {
+        if (user.getRole() != Role.ADMIN &&
+                user.getRole() != Role.DEVELOPER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER lathatja az osszes csapatot."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER lathatja az osszes teamot."));
         }
 
-        List<TeamResponse> teams = csapatRepository.findAll()
+        List<TeamResponse> teams = teamRepository.findAll()
                 .stream()
-                .map(this::csapatValassaAlakitas)
+                .map(this::toTeamResponse)
                 .toList();
 
         return ResponseEntity.ok(teams);
     }
 
     @GetMapping("/membership")
-    public ResponseEntity<?> tagsagLekerdezes(@RequestParam String email) {
+    public ResponseEntity<?> getMembership(@RequestParam String email) {
 
-        Alkalmazott felhasznalo = alkalmazottRepository.findByEmailIgnoreCase(email).orElse(null);
+        Employee user = employeeRepository.findByEmailIgnoreCase(email).orElse(null);
 
-        if (felhasznalo == null || !felhasznalo.isActive()) {
+        if (user == null || !user.isActive()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER kerheti le a sajat csapatat."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER kerheti le a sajat teamat."));
         }
 
-        if (felhasznalo.getSzerepkor() != Szerepkor.ADMIN &&
-                felhasznalo.getSzerepkor() != Szerepkor.DEVELOPER) {
+        if (user.getRole() != Role.ADMIN &&
+                user.getRole() != Role.DEVELOPER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER kerheti le a sajat csapatat."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER kerheti le a sajat teamat."));
         }
 
-        if (felhasznalo.getCsapat() == null) {
+        if (user.getTeam() == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Meg nem vagy csapatban."));
+                    .body(Map.of("message", "Meg nem vagy teamban."));
         }
 
-        return ResponseEntity.ok(csapatValassaAlakitas(felhasznalo.getCsapat()));
+        return ResponseEntity.ok(toTeamResponse(user.getTeam()));
     }
 
     @PostMapping("/create")
-    public ResponseEntity<?> csapatLetrehozas(@RequestBody CreateTeamRequest keres) {
+    public ResponseEntity<?> createTeam(@RequestBody CreateTeamRequest request) {
 
-        if (keres == null || keres.ownerEmail() == null || keres.ownerEmail().isBlank()) {
+        if (request == null || request.ownerEmail() == null || request.ownerEmail().isBlank()) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "tulajdonos email kotelezo."));
+                    .body(Map.of("message", "owner email kotelezo."));
         }
 
-        Alkalmazott tulajdonos = alkalmazottRepository.findByEmailIgnoreCase(keres.ownerEmail()).orElse(null);
+        Employee owner = employeeRepository.findByEmailIgnoreCase(request.ownerEmail()).orElse(null);
 
-        if (tulajdonos == null || !tulajdonos.isActive() || tulajdonos.getSzerepkor() != Szerepkor.PRODUCT_OWNER) {
+        if (!canManageOwnedTeam(owner)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv PRODUCT_OWNER hozhat letre csapatot."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy PRODUCT_OWNER hozhat letre teamot."));
         }
 
-        if (csapatRepository.findByTulajdonosEmailIgnoreCase(tulajdonos.getEmail()).isPresent()) {
+        if (teamRepository.findByOwnerEmailIgnoreCase(owner.getEmail()).isPresent()) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Ennek a team ownernek mar van csapata."));
+                    .body(Map.of("message", "Ennek a team ownernek mar van teama."));
         }
 
-        Csapat csapat = new Csapat(keres.name(), tulajdonos);
-        Csapat mentett = csapatRepository.save(csapat);
+        Team team = new Team(request.name(), owner);
+        Team saved = teamRepository.save(team);
 
-        return ResponseEntity.ok(csapatValassaAlakitas(mentett));
+        return ResponseEntity.ok(toTeamResponse(saved));
     }
 
     @GetMapping("/available-developers")
-    public ResponseEntity<?> szabadFejlesztokLekerdezes(@RequestParam String ownerEmail) {
+    public ResponseEntity<?> getAvailableDevelopers(@RequestParam String ownerEmail) {
 
-        Alkalmazott tulajdonos = alkalmazottRepository.findByEmailIgnoreCase(ownerEmail).orElse(null);
+        Employee owner = employeeRepository.findByEmailIgnoreCase(ownerEmail).orElse(null);
 
-        if (tulajdonos == null || !tulajdonos.isActive() || tulajdonos.getSzerepkor() != Szerepkor.PRODUCT_OWNER) {
+        if (!canManageOwnedTeam(owner)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv PRODUCT_OWNER lathatja a szabad DEVELOPERket."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy PRODUCT_OWNER lathatja a szabad DEVELOPERket."));
         }
 
-        List<EmployeeResponse> developers = alkalmazottRepository
-                .findBySzerepkorAndActiveTrueAndCsapatIsNull(Szerepkor.DEVELOPER)
+        List<EmployeeResponse> developers = employeeRepository
+                .findByRoleAndActiveTrueAndTeamIsNull(Role.DEVELOPER)
                 .stream()
-                .map(this::alkalmazottValassaAlakitas)
+                .map(this::toEmployeeResponse)
                 .toList();
 
         return ResponseEntity.ok(developers);
     }
 
     @PostMapping("/add-member")
-    public ResponseEntity<?> tagHozzaadas(@RequestBody AddMemberRequest keres) {
+    public ResponseEntity<?> addMember(@RequestBody AddMemberRequest request) {
 
-        if (keres == null) {
+        if (request == null) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Hianyzo adatok."));
         }
 
-        Alkalmazott tulajdonos = alkalmazottRepository.findByEmailIgnoreCase(keres.ownerEmail()).orElse(null);
+        Employee owner = employeeRepository.findByEmailIgnoreCase(request.ownerEmail()).orElse(null);
 
-        if (tulajdonos == null || !tulajdonos.isActive() || tulajdonos.getSzerepkor() != Szerepkor.PRODUCT_OWNER) {
+        if (!canManageOwnedTeam(owner)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv PRODUCT_OWNER vehet fel DEVELOPERt."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy PRODUCT_OWNER vehet fel DEVELOPERt."));
         }
 
-        Csapat csapat = csapatRepository.findByTulajdonosEmailIgnoreCase(tulajdonos.getEmail()).orElse(null);
+        Team team = teamRepository.findByOwnerEmailIgnoreCase(owner.getEmail()).orElse(null);
 
-        if (csapat == null) {
+        if (team == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Eloszor hozz letre csapatot."));
+                    .body(Map.of("message", "Eloszor hozz letre teamot."));
         }
 
-        Alkalmazott DEVELOPER = alkalmazottRepository.findById(keres.developerId()).orElse(null);
+        Employee developer = employeeRepository.findById(request.developerId()).orElse(null);
 
-        if (DEVELOPER == null) {
+        if (developer == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Nincs ilyen DEVELOPER."));
         }
 
-        if (!DEVELOPER.isActive() || DEVELOPER.getSzerepkor() != Szerepkor.DEVELOPER) {
+        if (!developer.isActive() || developer.getRole() != Role.DEVELOPER) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Csak aktiv DEVELOPER veheto fel csapatba."));
+                    .body(Map.of("message", "Csak aktiv DEVELOPER veheto fel teamba."));
         }
 
-        if (DEVELOPER.getCsapat() != null) {
+        if (developer.getTeam() != null) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Ez a DEVELOPER mar csapatban van."));
+                    .body(Map.of("message", "Ez a DEVELOPER mar teamban van."));
         }
 
-        DEVELOPER.setCsapat(csapat);
-        alkalmazottRepository.save(DEVELOPER);
+        developer.setTeam(team);
+        employeeRepository.save(developer);
 
-        Csapat frissitett = csapatRepository.findById(csapat.getId()).orElse(csapat);
+        Team updated = teamRepository.findById(team.getId()).orElse(team);
 
-        return ResponseEntity.ok(csapatValassaAlakitas(frissitett));
+        return ResponseEntity.ok(toTeamResponse(updated));
+    }
+
+    @PostMapping("/delete")
+    public ResponseEntity<?> deleteTeam(@RequestBody DeleteTeamRequest request) {
+
+        if (request == null || request.requesterEmail() == null || request.requesterEmail().isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "requester email kotelezo."));
+        }
+
+        Employee requester = employeeRepository.findByEmailIgnoreCase(request.requesterEmail()).orElse(null);
+
+        if (!canManageOwnedTeam(requester)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy PRODUCT_OWNER szuntethet meg teamot."));
+        }
+
+        Team team = teamRepository.findByOwnerEmailIgnoreCase(requester.getEmail()).orElse(null);
+
+        if (team == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Meg nincs teamod."));
+        }
+
+        detachTeam(team);
+        teamRepository.delete(team);
+
+        return ResponseEntity.ok(Map.of("message", "A team megszuntetve."));
     }
 
     @PostMapping("/join")
-    public ResponseEntity<?> csapathozCsatlakozas(@RequestBody JoinTeamRequest keres) {
+    public ResponseEntity<?> joinTeam(@RequestBody JoinTeamRequest request) {
 
-        if (keres == null) {
+        if (request == null) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Hianyzo adatok."));
         }
 
-        Alkalmazott felhasznalo = alkalmazottRepository.findByEmailIgnoreCase(keres.email()).orElse(null);
+        Employee user = employeeRepository.findByEmailIgnoreCase(request.email()).orElse(null);
 
-        if (felhasznalo == null || !felhasznalo.isActive()) {
+        if (user == null || !user.isActive()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER csatlakozhat csapathoz."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER csatlakozhat teamhoz."));
         }
 
-        if (felhasznalo.getSzerepkor() != Szerepkor.ADMIN &&
-                felhasznalo.getSzerepkor() != Szerepkor.DEVELOPER) {
+        if (user.getRole() != Role.ADMIN &&
+                user.getRole() != Role.DEVELOPER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER csatlakozhat csapathoz."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER csatlakozhat teamhoz."));
         }
 
-        Csapat csapat = csapatRepository.findById(keres.teamId()).orElse(null);
+        Team team = teamRepository.findById(request.teamId()).orElse(null);
 
-        if (csapat == null) {
+        if (team == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Nincs ilyen csapat."));
+                    .body(Map.of("message", "Nincs ilyen team."));
         }
 
-        if (felhasznalo.getCsapat() != null) {
+        if (user.getTeam() != null) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Mar tagja vagy egy csapatnak. Eloszor lepj ki onnan."));
+                    .body(Map.of("message", "Mar tagja vagy egy teamnak. Eloszor lepj ki onnan."));
         }
 
-        felhasznalo.setCsapat(csapat);
-        alkalmazottRepository.save(felhasznalo);
+        user.setTeam(team);
+        employeeRepository.save(user);
 
-        Csapat frissitett = csapatRepository.findById(csapat.getId()).orElse(csapat);
+        Team updated = teamRepository.findById(team.getId()).orElse(team);
 
-        return ResponseEntity.ok(csapatValassaAlakitas(frissitett));
+        return ResponseEntity.ok(toTeamResponse(updated));
     }
 
     @PostMapping("/leave")
-    public ResponseEntity<?> csapatElhagyas(@RequestBody LeaveTeamRequest keres) {
+    public ResponseEntity<?> leaveTeam(@RequestBody LeaveTeamRequest request) {
 
-        if (keres == null) {
+        if (request == null) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Hianyzo adatok."));
         }
 
-        Alkalmazott felhasznalo = alkalmazottRepository.findByEmailIgnoreCase(keres.email()).orElse(null);
+        Employee user = employeeRepository.findByEmailIgnoreCase(request.email()).orElse(null);
 
-        if (felhasznalo == null || !felhasznalo.isActive()) {
+        if (user == null || !user.isActive()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER lephet ki csapatbol."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER lephet ki teambol."));
         }
 
-        if (felhasznalo.getSzerepkor() != Szerepkor.ADMIN &&
-                felhasznalo.getSzerepkor() != Szerepkor.DEVELOPER) {
+        if (user.getRole() != Role.ADMIN &&
+                user.getRole() != Role.DEVELOPER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER lephet ki csapatbol."));
+                    .body(Map.of("message", "Csak aktiv ADMIN vagy DEVELOPER lephet ki teambol."));
         }
 
-        if (felhasznalo.getCsapat() == null) {
+        if (user.getTeam() == null) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Nem vagy csapatban."));
+                    .body(Map.of("message", "Nem vagy teamban."));
         }
 
-        felhasznalo.setCsapat(null);
+        user.setTeam(null);
 
-        nyitottFeladatokFelszabaditasa(felhasznalo);
+        releaseOpenTasks(user);
 
-        alkalmazottRepository.save(felhasznalo);
+        employeeRepository.save(user);
 
-        return ResponseEntity.ok(Map.of("message", "Sikeresen kileptel a csapatbol."));
+        return ResponseEntity.ok(Map.of("message", "Sirequesten kileptel a teambol."));
     }
 
-    private void nyitottFeladatokFelszabaditasa(Alkalmazott DEVELOPER) {
+    private void releaseOpenTasks(Employee developer) {
 
-        feladatRepository.findByMunkatarsIdAndStatuszNot(
-                DEVELOPER.getId(),
-                FeladatStatusz.DONE
-        ).forEach(feladat -> {
-            feladat.setMunkatars(null);
-            feladat.setStatusz(FeladatStatusz.TO_DO);
-            feladatRepository.save(feladat);
+        taskRepository.findByEmployeeIdAndStatusNot(
+                developer.getId(),
+                TaskStatus.DONE
+        ).forEach(task -> {
+            task.setEmployee(null);
+            task.setStatus(TaskStatus.TO_DO);
+            taskRepository.save(task);
         });
     }
 
-    private TeamResponse csapatValassaAlakitas(Csapat csapat) {
+    private boolean canManageOwnedTeam(Employee employee) {
+        return employee != null &&
+                employee.isActive() &&
+                (employee.getRole() == Role.ADMIN || employee.getRole() == Role.PRODUCT_OWNER);
+    }
 
-        List<EmployeeResponse> tagok = csapat.getTagok()
+    private void detachTeam(Team team) {
+
+        for (Employee member : List.copyOf(team.getMembers())) {
+            member.setTeam(null);
+            releaseOpenTasks(member);
+            employeeRepository.save(member);
+        }
+
+        for (Project project : projectRepository.findByTeamId(team.getId())) {
+            project.setTeam(null);
+            projectRepository.save(project);
+        }
+    }
+
+    private TeamResponse toTeamResponse(Team team) {
+
+        List<EmployeeResponse> members = team.getMembers()
                 .stream()
-                .map(this::alkalmazottValassaAlakitas)
+                .map(this::toEmployeeResponse)
                 .toList();
 
         return new TeamResponse(
-                csapat.getId(),
-                csapat.getNev(),
-                alkalmazottValassaAlakitas(csapat.getTulajdonos()),
-                tagok
+                team.getId(),
+                team.getName(),
+                toEmployeeResponse(team.getOwner()),
+                members
         );
     }
 
-    private EmployeeResponse alkalmazottValassaAlakitas(Alkalmazott alkalmazott) {
+    private EmployeeResponse toEmployeeResponse(Employee employee) {
         return new EmployeeResponse(
-                alkalmazott.getId(),
-                alkalmazott.getKeresztnev(),
-                alkalmazott.getVezeteknev(),
-                alkalmazott.getEmail(),
-                alkalmazott.getSzerepkor().name()
+                employee.getId(),
+                employee.getFirstName(),
+                employee.getLastName(),
+                employee.getEmail(),
+                employee.getRole().name()
         );
     }
 
@@ -330,18 +383,22 @@ public class TeamController {
             String email
     ) {}
 
+    public record DeleteTeamRequest(
+            String requesterEmail
+    ) {}
+
     public record EmployeeResponse(
             Long id,
-            String keresztnev,
-            String vezeteknev,
+            String firstName,
+            String lastName,
             String email,
-            String szerepkor
+            String role
     ) {}
 
     public record TeamResponse(
             Long id,
             String name,
-            EmployeeResponse tulajdonos,
-            List<EmployeeResponse> tagok
+            EmployeeResponse owner,
+            List<EmployeeResponse> members
     ) {}
 }

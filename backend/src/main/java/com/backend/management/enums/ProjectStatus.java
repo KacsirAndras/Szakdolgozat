@@ -1,6 +1,6 @@
 package com.backend.management.enums;
 
-public enum ProjektStatusz {
+public enum ProjectStatus {
     PENDING,
     ACCEPTED,
     REJECTED,

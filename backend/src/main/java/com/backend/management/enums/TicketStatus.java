@@ -1,6 +1,6 @@
 package com.backend.management.enums;
 
-public enum JegyStatusz {
+public enum TicketStatus {
     OPEN,
     IN_PROGRESS,
     RESOLVED,

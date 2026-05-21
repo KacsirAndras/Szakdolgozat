@@ -4,32 +4,32 @@ import java.time.LocalDate;
 
 public class SalaryCalculator {
 
-    public static long korrigaltBruttoFizetes(Long bruttoFizetes, LocalDate felvetelDatum, LocalDate maiNap) {
+    public static long adjustedGrossSalary(Long grossSalary, LocalDate hireDate, LocalDate currentDate) {
 
-        long brutto = 0;
+        long gross = 0;
 
-        if (bruttoFizetes != null) {
-            brutto = bruttoFizetes;
+        if (grossSalary != null) {
+            gross = grossSalary;
         }
 
-        if (felvetelDatum != null && maiNap != null) {
+        if (hireDate != null && currentDate != null) {
 
-            LocalDate otEvvelKesobb = felvetelDatum.plusYears(5);
+            LocalDate fiveYearsLater = hireDate.plusYears(5);
 
-            if (!otEvvelKesobb.isAfter(maiNap)) {
-                brutto = Math.round(brutto * 1.10);
+            if (!fiveYearsLater.isAfter(currentDate)) {
+                gross = Math.round(gross * 1.10);
             }
         }
 
-        return brutto;
+        return gross;
     }
 
-    public static long nettoFizetes(Long bruttoFizetes, LocalDate felvetelDatum, LocalDate maiNap) {
+    public static long netSalary(Long grossSalary, LocalDate hireDate, LocalDate currentDate) {
 
-        long brutto = korrigaltBruttoFizetes(bruttoFizetes, felvetelDatum, maiNap);
+        long gross = adjustedGrossSalary(grossSalary, hireDate, currentDate);
 
-        long netto = Math.round(brutto * 0.665);
+        long net = Math.round(gross * 0.665);
 
-        return netto;
+        return net;
     }
 }

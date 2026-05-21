@@ -1,13 +1,13 @@
 package com.backend.management.controller;
 
-import com.backend.management.enums.ProjektStatusz;
-import com.backend.management.enums.Szerepkor;
-import com.backend.management.model.Alkalmazott;
-import com.backend.management.model.Felhasznalo;
-import com.backend.management.model.Projekt;
-import com.backend.management.repository.AlkalmazottRepository;
-import com.backend.management.repository.FelhasznaloRepository;
-import com.backend.management.repository.ProjektRepository;
+import com.backend.management.enums.ProjectStatus;
+import com.backend.management.enums.Role;
+import com.backend.management.model.Employee;
+import com.backend.management.model.User;
+import com.backend.management.model.Project;
+import com.backend.management.repository.EmployeeRepository;
+import com.backend.management.repository.UserRepository;
+import com.backend.management.repository.ProjectRepository;
 import com.backend.management.service.SalaryCalculator;
 
 import org.springframework.http.HttpStatus;
@@ -18,7 +18,6 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.time.YearMonth;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -27,225 +26,226 @@ import java.util.Map;
 @CrossOrigin(origins = {"http://127.0.0.1:4200", "http://localhost:4200"})
 public class StatisticsController {
 
-    private static final LocalDate KEZDO_DATUM = LocalDate.of(2020, 1, 1);
-    private static final long KEZDO_EGYENLEG = 20_000_000L;
+    private static final LocalDate START_DATE = LocalDate.of(2020, 1, 1);
+    private static final long START_BALANCE = 20_000_000L;
 
-    private final FelhasznaloRepository felhasznaloRepository;
-    private final AlkalmazottRepository alkalmazottRepository;
-    private final ProjektRepository projektRepository;
+    private final UserRepository userRepository;
+    private final EmployeeRepository employeeRepository;
+    private final ProjectRepository projectRepository;
 
-    public StatisticsController(FelhasznaloRepository felhasznaloRepository,
-                                AlkalmazottRepository alkalmazottRepository,
-                                ProjektRepository projektRepository) {
-        this.felhasznaloRepository = felhasznaloRepository;
-        this.alkalmazottRepository = alkalmazottRepository;
-        this.projektRepository = projektRepository;
+    public StatisticsController(UserRepository userRepository,
+                                EmployeeRepository employeeRepository,
+                                ProjectRepository projectRepository) {
+        this.userRepository = userRepository;
+        this.employeeRepository = employeeRepository;
+        this.projectRepository = projectRepository;
     }
 
     @GetMapping
-    public ResponseEntity<?> statisztikaLekerdezes(@RequestParam String email,
-                                           @RequestParam(defaultValue = "2025") int year) {
+    public ResponseEntity<?> getStatistics(@RequestParam String email,
+                                           @RequestParam(required = false) Integer year) {
 
-        if (!aktivAdminE(email)) {
+        if (!isActiveAdmin(email)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Csak aktiv ADMIN lathatja a statisztikat."));
         }
 
-        int valasztottEv = year;
+        int currentYear = LocalDate.now().getYear();
+        int selectedYear = year == null ? currentYear : year;
 
-        if (valasztottEv < 2020) {
-            valasztottEv = 2020;
+        if (selectedYear < 2000) {
+            selectedYear = 2000;
         }
 
-        if (valasztottEv > 2100) {
-            valasztottEv = 2100;
+        if (selectedYear > currentYear) {
+            selectedYear = currentYear;
         }
 
-        List<Felhasznalo> felhasznalok = felhasznaloRepository.findAll();
-        List<Alkalmazott> alkalmazottak = alkalmazottRepository.findAll();
-        List<Projekt> projektek = projektRepository.findAll();
+        List<User> users = userRepository.findAll();
+        List<Employee> employees = employeeRepository.findAll();
+        List<Project> projects = projectRepository.findAll();
 
-        long haviBerKoltseg = 0;
+        long monthlySalaryCost = 0;
 
-        for (Alkalmazott alkalmazott : alkalmazottak) {
-            if (alkalmazott.isActive()) {
-                haviBerKoltseg += SalaryCalculator.nettoFizetes(
-                        alkalmazott.getFizetes(),
-                        alkalmazott.getFelvetelDatum(),
+        for (Employee employee : employees) {
+            if (employee.isActive()) {
+                monthlySalaryCost += SalaryCalculator.netSalary(
+                        employee.getSalary(),
+                        employee.getHireDate(),
                         LocalDate.now()
                 );
             }
         }
 
-        List<RoleSlice> szerepkorSzeletek = new ArrayList<>();
+        List<RoleSlice> roleSlices = new ArrayList<>();
 
-        for (Szerepkor szerepkor : Szerepkor.values()) {
-            long darab = 0;
+        for (Role role : Role.values()) {
+            long count = 0;
 
-            for (Felhasznalo felhasznalo : felhasznalok) {
-                if (felhasznalo.getSzerepkor() == szerepkor) {
-                    darab++;
+            for (User user : users) {
+                if (user.getRole() == role) {
+                    count++;
                 }
             }
 
-            szerepkorSzeletek.add(new RoleSlice(
-                    szerepkor.name(),
-                    darab,
-                    szinSzerepkorhoz(szerepkor)
+            roleSlices.add(new RoleSlice(
+                    role.name(),
+                    count,
+                    colorForRole(role)
             ));
         }
 
-        YearMonth elsoHonap = YearMonth.of(valasztottEv, 1);
-        long evElottiEgyenleg = egyenlegSzamitasHonapig(elsoHonap, haviBerKoltseg, projektek);
+        YearMonth firstMonth = YearMonth.of(selectedYear, 1);
+        long balanceBeforeYear = calculateBalanceUntil(firstMonth, monthlySalaryCost, projects);
 
-        long egyenleg = evElottiEgyenleg;
-        List<MonthlyFinance> honapok = new ArrayList<>();
+        long balance = balanceBeforeYear;
+        List<MonthlyFinance> months = new ArrayList<>();
 
-        for (Month honap : Month.values()) {
+        for (Month month : Month.values()) {
 
-            YearMonth aktualisHonap = YearMonth.of(valasztottEv, honap);
+            YearMonth currentMonth = YearMonth.of(selectedYear, month);
 
-            long projektBevetel = befejezettProjektBevetel(projektek, aktualisHonap);
-            long nyereseg = projektBevetel - haviBerKoltseg;
+            long projectRevenue = completedProjectRevenue(projects, currentMonth);
+            long profit = projectRevenue - monthlySalaryCost;
 
-            egyenleg = egyenleg + nyereseg;
+            balance = balance + profit;
 
-            honapok.add(new MonthlyFinance(
-                    honap.getValue(),
-                    magyarHonap(honap),
-                    projektBevetel,
-                    haviBerKoltseg,
-                    nyereseg,
-                    egyenleg
+            months.add(new MonthlyFinance(
+                    month.getValue(),
+                    hungarianMonthName(month),
+                    projectRevenue,
+                    monthlySalaryCost,
+                    profit,
+                    balance
             ));
         }
 
-        StatisticsResponse valasz = new StatisticsResponse(
-                KEZDO_DATUM,
-                KEZDO_EGYENLEG,
-                valasztottEv,
-                evElottiEgyenleg,
-                szerepkorSzeletek,
-                honapok
+        StatisticsResponse response = new StatisticsResponse(
+                START_DATE,
+                START_BALANCE,
+                selectedYear,
+                balanceBeforeYear,
+                roleSlices,
+                months
         );
 
-        return ResponseEntity.ok(valasz);
+        return ResponseEntity.ok(response);
     }
 
-    private long egyenlegSzamitasHonapig(YearMonth celHonap,
-                                       long haviBerKoltseg,
-                                       List<Projekt> projektek) {
+    private long calculateBalanceUntil(YearMonth targetMonth,
+                                       long monthlySalaryCost,
+                                       List<Project> projects) {
 
-        long egyenleg = KEZDO_EGYENLEG;
+        long balance = START_BALANCE;
 
-        YearMonth aktualis = YearMonth.from(KEZDO_DATUM);
+        YearMonth current = YearMonth.from(START_DATE);
 
-        while (aktualis.isBefore(celHonap)) {
+        while (current.isBefore(targetMonth)) {
 
-            long bevetel = befejezettProjektBevetel(projektek, aktualis);
-            long nyereseg = bevetel - haviBerKoltseg;
+            long revenue = completedProjectRevenue(projects, current);
+            long profit = revenue - monthlySalaryCost;
 
-            egyenleg = egyenleg + nyereseg;
+            balance = balance + profit;
 
-            aktualis = aktualis.plusMonths(1);
+            current = current.plusMonths(1);
         }
 
-        return egyenleg;
+        return balance;
     }
 
-    private long befejezettProjektBevetel(List<Projekt> projektek, YearMonth honap) {
+    private long completedProjectRevenue(List<Project> projects, YearMonth month) {
 
-        long osszeg = 0;
+        long total = 0;
 
-        for (Projekt project : projektek) {
+        for (Project project : projects) {
 
-            if (project.getStatusz() == ProjektStatusz.COMPLETED &&
-                    project.getBefejezve() != null) {
+            if (project.getStatus() == ProjectStatus.COMPLETED &&
+                    project.getCompletedAt() != null) {
 
-                YearMonth projektHonap = YearMonth.from(project.getBefejezve());
+                YearMonth projectMonth = YearMonth.from(project.getCompletedAt());
 
-                if (projektHonap.equals(honap)) {
-                    osszeg += project.getProjektKoltseg();
+                if (projectMonth.equals(month)) {
+                    total += project.getBudget();
                 }
             }
         }
 
-        return osszeg;
+        return total;
     }
 
-    private boolean aktivAdminE(String email) {
+    private boolean isActiveAdmin(String email) {
 
         if (email == null || email.isBlank()) {
             return false;
         }
 
-        Felhasznalo felhasznalo = felhasznaloRepository.findByEmailIgnoreCase(email).orElse(null);
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
 
-        if (felhasznalo == null) {
+        if (user == null) {
             return false;
         }
 
-        if (!felhasznalo.isActive()) {
+        if (!user.isActive()) {
             return false;
         }
 
-        return felhasznalo.getSzerepkor() == Szerepkor.ADMIN;
+        return user.getRole() == Role.ADMIN;
     }
 
-    private String szinSzerepkorhoz(Szerepkor szerepkor) {
+    private String colorForRole(Role role) {
 
-        if (szerepkor == Szerepkor.CUSTOMER) {
+        if (role == Role.CUSTOMER) {
             return "#0969da";
         }
 
-        if (szerepkor == Szerepkor.ADMIN) {
+        if (role == Role.ADMIN) {
             return "#a40e26";
         }
 
-        if (szerepkor == Szerepkor.IT) {
+        if (role == Role.IT) {
             return "#1a7f37";
         }
 
-        if (szerepkor == Szerepkor.HR) {
+        if (role == Role.HR) {
             return "#bf8700";
         }
 
-        if (szerepkor == Szerepkor.PRODUCT_OWNER) {
+        if (role == Role.PRODUCT_OWNER) {
             return "#8250df";
         }
 
-        if (szerepkor == Szerepkor.DEVELOPER) {
+        if (role == Role.DEVELOPER) {
             return "#57606a";
         }
 
         return "#000000";
     }
 
-    private String magyarHonap(Month honap) {
+    private String hungarianMonthName(Month month) {
 
-        if (honap == Month.JANUARY) {
+        if (month == Month.JANUARY) {
             return "Januar";
-        } else if (honap == Month.FEBRUARY) {
+        } else if (month == Month.FEBRUARY) {
             return "Februar";
-        } else if (honap == Month.MARCH) {
+        } else if (month == Month.MARCH) {
             return "Marcius";
-        } else if (honap == Month.APRIL) {
+        } else if (month == Month.APRIL) {
             return "Aprilis";
-        } else if (honap == Month.MAY) {
+        } else if (month == Month.MAY) {
             return "Majus";
-        } else if (honap == Month.JUNE) {
+        } else if (month == Month.JUNE) {
             return "Junius";
-        } else if (honap == Month.JULY) {
+        } else if (month == Month.JULY) {
             return "Julius";
-        } else if (honap == Month.AUGUST) {
+        } else if (month == Month.AUGUST) {
             return "Augusztus";
-        } else if (honap == Month.SEPTEMBER) {
+        } else if (month == Month.SEPTEMBER) {
             return "Szeptember";
-        } else if (honap == Month.OCTOBER) {
+        } else if (month == Month.OCTOBER) {
             return "Oktober";
-        } else if (honap == Month.NOVEMBER) {
+        } else if (month == Month.NOVEMBER) {
             return "November";
-        } else if (honap == Month.DECEMBER) {
+        } else if (month == Month.DECEMBER) {
             return "December";
         }
 
@@ -256,23 +256,23 @@ public class StatisticsController {
             LocalDate startDate,
             long startBalance,
             int year,
-            long evElottiEgyenleg,
-            List<RoleSlice> szerepkorSzeletek,
-            List<MonthlyFinance> honapok
+            long balanceBeforeYear,
+            List<RoleSlice> roleSlices,
+            List<MonthlyFinance> months
     ) {}
 
     public record RoleSlice(
-            String szerepkor,
-            long darab,
+            String role,
+            long count,
             String color
     ) {}
 
     public record MonthlyFinance(
-            int honap,
+            int month,
             String label,
-            long projektBevetel,
+            long projectIncome,
             long salaryCost,
-            long nyereseg,
+            long profit,
             long balanceAfter
     ) {}
 }
